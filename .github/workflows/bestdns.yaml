@@ -62,3 +62,12 @@ jobs:
           git add Fission_domain.txt
           git commit -m "Update output files from Fission.py execution [skip ci]"
           git push
+
+      - name: Wait for 10 seconds
+        run: sleep 10  # 等待 10 秒钟
+
+      - name: Trigger HTTPX-Scan workflow
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: httpx-scan-trigger  # 自定义事件类型

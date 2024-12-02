@@ -63,6 +63,10 @@ jobs:
           git commit -m "Update output files from Fission.py execution [skip ci]"
           git push
 
+       # 等待 5 秒
+      - name: Wait 5 seconds
+        run: sleep 5
+
       - name: Trigger HTTPX-Scan workflow
         if: steps.run-fission-script.outcome == 'success'
         run: |

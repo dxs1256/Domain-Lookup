@@ -62,3 +62,11 @@ jobs:
           git add Fission_domain.txt
           git commit -m "Update output files from Fission.py execution [skip ci]"
           git push
+
+      - name: Trigger HTTPX-Scan workflow
+        if: steps.run-fission-script.outcome == 'success'
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -d '{"event_type": "httpx-scan-trigger"}' \
+            https://api.github.com/repos/${{ github.repository }}/dispatches

@@ -1,12 +1,10 @@
 name: Check Domains
 
 on:
-  push:
-    paths:
-      - 'Fission_domain.txt'
-    branches:
-      - main
-  workflow_dispatch:
+  workflow_run:
+    workflows: ["bestdns"]
+    types:
+      - completed
 
 jobs:
   check-domains:

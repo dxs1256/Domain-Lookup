@@ -16,7 +16,10 @@ jobs:
 
       # 安装 curl 和 xmllint
       - name: Install Dependencies
-        run: sudo apt-get update && sudo apt-get install -y curl libxml2-utils
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl libxml2-utils
+          sudo apt-get clean
 
       # 获取数据并写入文件
       - name: Fetch IP and Update File
@@ -44,7 +47,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
           # 检查文件是否有更改
-          if [ -n "$(git status --porcelain)" ]; then
+          if ! git diff --quiet; then
             git add Fission_ip.txt
             git commit -m "Update Fission_ip.txt with latest IPs"
             git push origin HEAD:main

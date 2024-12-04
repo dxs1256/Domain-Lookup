@@ -1,6 +1,6 @@
 # 项目说明
 
-该项目旨在获取并反查 Cloudflare IP 地址，以获取大量域名，并验证这些域名的可用性。IP 地址的获取部分由 GitHub Actions 自动完成。本项目支持通过 GitHub Actions 实现自动化部署。
+该项目旨在获取并反查 Cloudflare IP 地址，以获取大量域名，并验证这些域名的可用性。IP 地址的获取部分由 GitHub Actions 自动完成，从 [https://www.wetest.vip/page/cloudflare/address_v4.html](https://www.wetest.vip/page/cloudflare/address_v4.html) 抓取三个 IP 地址。本项目支持通过 GitHub Actions 实现自动化部署。
 
 ## 工具说明
 
@@ -13,6 +13,7 @@
 
 ### Fission_ip.txt
 - **内容**：包含从 Cloudflare 获取的 IP 地址列表。  
+  **(此文件由 GitHub Actions 自动生成)**。
 
 ### Fission_domain.txt
 - **内容**：通过反查 `Fission_ip.txt` 中的 IP 地址获取到的域名列表。
@@ -22,7 +23,7 @@
 
 ## 使用方法
 
-1. **IP 地址获取**：IP 地址由 GitHub Actions 自动获取，并保存至 `Fission_ip.txt` 文件。
+1. **IP 地址获取**：IP 地址由 GitHub Actions 自动从 [https://www.wetest.vip/page/cloudflare/address_v4.html](https://www.wetest.vip/page/cloudflare/address_v4.html) 抓取并保存至 `Fission_ip.txt` 文件。
 2. **反查域名**：使用 `Fission.py` 脚本反查 `Fission_ip.txt` 中的 IP 地址，生成 `Fission_domain.txt` 文件。
 3. **域名检测**：在 `Fission.py` 脚本运行时，使用 `httpx` 工具对 `Fission_domain.txt` 中的域名进行可用性检测。
 4. **保存结果**：将检测结果保存至 `Last-domain.txt` 文件中。

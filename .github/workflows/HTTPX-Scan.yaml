@@ -41,7 +41,7 @@ jobs:
           echo "读取 Fission_domain.txt 并使用 httpx 进行探测..."
           cat Fission_domain.txt | while read domain; do
             echo "正在检测域名: $domain"
-            httpx -silent -mc 200 -u "$domain" && echo "$domain 状态码为 200，已加入到 Last-domain.txt"
+            httpx -ip -websocket -asn -mc 200 -u "$domain" && echo "$domain 状态码为 200，已加入到 Last-domain.txt"
           done
 
           echo "操作完成，Last-domain.txt 已更新。"

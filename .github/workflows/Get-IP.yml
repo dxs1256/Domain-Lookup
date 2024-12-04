@@ -48,3 +48,14 @@ jobs:
         git commit -m "Update Fission_ip.txt with top 3 IP addresses"
         git push
         echo "Changes pushed to repository."
+
+          # 等待 20 秒
+    - name: Wait 20 seconds
+      run: sleep 20
+
+      # 触发 bestdns.yaml
+    - name: Trigger BestDNS Workflow
+      uses: peter-evans/repository-dispatch@v2
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        event-type: bestdns-update # 自定义事件名称

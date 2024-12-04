@@ -12,5 +12,10 @@
 
 运行 `Fission.py` 脚本，程序将从 `Fission_ip.txt` 文件中提取 IP 地址，通过反查获取大量域名，并将结果保存到 `Fission_domain.txt` 文件中。
 
-```bash
-python Fission.py
+### 3. 验证域名可用性
+
+使用 httpx 工具对 Fission_domain.txt 中的域名进行 HTTP 请求，筛选出返回 HTTP 状态码为 200 的域名，并将其保存到 Last-domain.txt 文件中。
+
+参考项目
+Fission.py - 用于获取并反查 Cloudflare IP 地址，获得大量域名。
+httpx - 用于验证域名可用性的工具，支持批量域名检测。

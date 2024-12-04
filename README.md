@@ -19,12 +19,6 @@
 2. **反查域名**：使用 `Fission.py` 脚本反查 `Fission_ip.txt` 中的 IP 地址，生成 `Fission_domain.txt` 文件。
 3. **域名检测**：使用 [httpx](https://github.com/projectdiscovery/httpx) 工具对 `Fission_domain.txt` 中的域名进行可用性检测，筛选出 HTTP 状态码为 200 的域名。将检测结果保存至 `Last-domain.txt` 文件中。
 
-## 注意事项
-
-- 确保在运行脚本和工具之前已经安装了所有必要的依赖，包括 `httpx` 工具。
-- 由于网络环境和 Cloudflare 的动态性，获取的 IP 地址和域名列表可能会随时间变化。
-- 请遵守相关法律法规，不要将此工具用于非法用途。
-
 ## 感谢
 
 感谢原项目作者 [snowfal1](https://github.com/snowfal1) 提供的开源项目 [CloudflareCDNFission](https://github.com/snowfal1/CloudflareCDNFission)，为本项目提供了重要的技术支持和灵感。

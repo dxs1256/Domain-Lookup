@@ -1,21 +1,44 @@
-# Cloudflare IP 反查工具
+# Fission Project
 
-此工具旨在通过抓取 Cloudflare 地址、反查 IP 获取域名，并验证域名的可用性。具体操作步骤如下：
+该项目旨在获取并反查 Cloudflare IP 地址，以获取大量域名，并验证这些域名的可用性。
 
-## 操作步骤
+## 工具说明
 
-### 1. 抓取 IP 地址
+### Fission.py
+- **用途**：用于获取 Cloudflare IP 地址，并反查这些 IP 地址以获取与之关联的域名列表。
+- **功能**：自动化抓取和反查过程，生成包含大量域名的列表。
 
-访问 [WeTest Cloudflare 地址查询](https://www.wetest.vip/page/cloudflare/address_v4.html) 页面，抓取至少 3 个 IP 地址，并将其保存到 `Fission_ip.txt` 文件中。
+### httpx
+- **用途**：用于验证域名的可用性。
+- **功能**：支持批量域名检测，能够识别出 HTTP 状态码为 200 的可用域名。
 
-### 2. 通过反查获取大量域名
+## 文件说明
 
-运行 `Fission.py` 脚本，程序将从 `Fission_ip.txt` 文件中提取 IP 地址，通过反查获取大量域名，并将结果保存到 `Fission_domain.txt` 文件中。
+### Fission_ip.txt
+- **内容**：包含从 Cloudflare 获取的 IP 地址列表。
 
-### 3. 验证域名可用性
+### Fission_domain.txt
+- **内容**：通过反查 `Fission_ip.txt` 中的 IP 地址获取到的域名列表。
 
-使用 httpx 工具对 Fission_domain.txt 中的域名进行 HTTP 请求，筛选出返回 HTTP 状态码为 200 的域名，并将其保存到 Last-domain.txt 文件中。
+### Last-domain.txt
+- **内容**：最终筛选出的可用域名列表（HTTP 状态码为 200）。
 
-参考项目
-Fission.py - 用于获取并反查 Cloudflare IP 地址，获得大量域名。
-httpx - 用于验证域名可用性的工具，支持批量域名检测。
+## 使用方法
+
+1. 运行 `Fission.py` 脚本以获取 Cloudflare IP 地址和反查域名。
+2. 使用 `httpx` 工具对 `Fission_domain.txt` 中的域名进行批量检测。
+3. 将检测结果保存至 `Last-domain.txt` 文件中。
+
+## 注意事项
+
+- 确保在运行脚本和工具之前已经安装了所有必要的依赖。
+- 由于网络环境和 Cloudflare 的动态性，获取的 IP 地址和域名列表可能会随时间变化。
+- 请遵守相关法律法规，不要将此工具用于非法用途。
+
+## 版权声明
+
+本项目为开源项目，您可以自由使用和修改，但请保留原作者信息和版权声明。
+
+---
+
+以上是 `README.md` 文件的内容，您可以根据实际项目的细节进行调整和补充。

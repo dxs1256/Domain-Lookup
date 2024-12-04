@@ -17,7 +17,7 @@
 
 1. **IP 地址获取**：自动抓取 IP 地址并保存至 `Fission_ip.txt` 文件。
 2. **反查域名**：使用 `Fission.py` 脚本反查 `Fission_ip.txt` 中的 IP 地址，生成 `Fission_domain.txt` 文件。
-3. **域名检测**：在筛选域名时，使用 `httpx` 工具对 `Fission_domain.txt` 中的域名进行可用性检测，筛选出 HTTP 状态码为 200 的域名。将检测结果保存至 `Last-domain.txt` 文件中。
+3. **域名检测**：使用 [httpx](https://github.com/projectdiscovery/httpx) 工具对 `Fission_domain.txt` 中的域名进行可用性检测，筛选出 HTTP 状态码为 200 的域名。将检测结果保存至 `Last-domain.txt` 文件中。
 
 ## 注意事项
 

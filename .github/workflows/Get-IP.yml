@@ -36,7 +36,7 @@ jobs:
     - name: Run the Python script
       run: |
         echo "Running the Python scraping script..."
-        python get_top_ips.py
+        python Get-IP.py
         echo "Script execution finished."
 
     - name: Commit the result to GitHub
@@ -49,9 +49,9 @@ jobs:
         git push
         echo "Changes pushed to repository."
 
-          # 等待 20 秒
-    - name: Wait 20 seconds
-      run: sleep 20
+          # 等待 5 秒
+    - name: Wait 5 seconds
+      run: sleep 5
 
       # 触发 bestdns.yaml
     - name: Trigger BestDNS Workflow

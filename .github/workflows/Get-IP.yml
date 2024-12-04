@@ -2,7 +2,7 @@ name: Web Scraping for Top IPs
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 每天定时运行一次，或根据需要调整
+    - cron: '0 */4 * * *'  # 每天定时运行一次，或根据需要调整
   workflow_dispatch:  # 允许手动触发
 
 jobs:

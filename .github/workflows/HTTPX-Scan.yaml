@@ -39,7 +39,7 @@ jobs:
           echo "读取 Fission_domain.txt 文件并使用 httpx 进行探测..."
           cat Fission_domain.txt | while read domain; do
             echo "正在检测域名: $domain"
-            httpx -mc 200 -u "$domain"
+            httpx -silent -mc 200 -u "$domain"
             if [ $? -eq 0 ]; then
               echo "$domain 状态码为 200，已加入到 Last-domain.txt"
               echo "$domain" >> Last-domain.txt

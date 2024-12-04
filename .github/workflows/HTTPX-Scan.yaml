@@ -50,10 +50,14 @@ jobs:
           while read domain; do
             echo "正在检测域名: $domain"
             # 使用 httpx 进行探测，如果返回状态码为 200 则写入 Last-domain.txt
-            httpx -silent -mc 200 -u "$domain" && echo "$domain" >> Last-domain.txt
+            if httpx -silent -mc 200 -u "$domain"; then
+              echo "$domain" | tee -a Last-domain.txt
+            fi
           done < Fission_domain.txt
 
           echo "域名检测完成，Last-domain.txt 已更新"
+
+
 
       - name: Remove protocol prefixes
         run: |

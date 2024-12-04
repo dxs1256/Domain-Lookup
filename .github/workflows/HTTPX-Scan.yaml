@@ -28,7 +28,7 @@ jobs:
             touch Last-domain.txt
           fi
           > Last-domain.txt
-          cat Fission_domain.txt | httpx -silent -mc 200 -ports 443 > Last-domain.txt
+          cat Fission_domain.txt | httpx -silent -mc 200 > Last-domain.txt
 
       - name: Remove protocol prefixes
         run: |

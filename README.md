@@ -1,7 +1,16 @@
-### 使用:
+# Cloudflare IP 反查工具
 
-1. 克隆项目到本地。
-2. 安装所需的第三方库: `pip install -r requirements.txt`
-3. 在`Fission_ip.txt`中填入至少一个ip(可以是Cloudflare官方的IP，也可以是第三方优选IP)，多个ip按行排列
-4. 运行`Fission.py`
-5. 多次运行`Fission.py`即可获取大量优选IP/域名
+此工具旨在通过抓取 Cloudflare 地址、反查 IP 获取域名，并验证域名的可用性。具体操作步骤如下：
+
+## 操作步骤
+
+### 1. 抓取 IP 地址
+
+访问 [WeTest Cloudflare 地址查询](https://www.wetest.vip/page/cloudflare/address_v4.html) 页面，抓取至少 3 个 IP 地址，并将其保存到 `Fission_ip.txt` 文件中。
+
+### 2. 通过反查获取大量域名
+
+运行 `Fission.py` 脚本，程序将从 `Fission_ip.txt` 文件中提取 IP 地址，通过反查获取大量域名，并将结果保存到 `Fission_domain.txt` 文件中。
+
+```bash
+python Fission.py

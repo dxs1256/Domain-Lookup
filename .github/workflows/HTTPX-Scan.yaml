@@ -13,16 +13,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Cache Go modules and httpx binary
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            $HOME/go/bin
-          key: ${{ runner.os }}-go-httpx-${{ hashFiles('**/go.mod', '**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-httpx-
-
       - name: Install Go
         uses: actions/setup-go@v4
         with:
@@ -30,54 +20,27 @@ jobs:
 
       - name: Install httpx
         run: |
-          echo "安装 httpx ..."
           go install github.com/projectdiscovery/httpx/cmd/httpx@latest
           echo "$HOME/go/bin" >> $GITHUB_PATH
-          echo "httpx 安装完成"
 
       - name: Check domains
         run: |
-          echo "检查 Last-domain.txt 文件是否存在..."
           if [ ! -f Last-domain.txt ]; then
-            echo "Last-domain.txt 文件不存在，创建该文件..."
             touch Last-domain.txt
           fi
-
-          # 清空 Last-domain.txt 文件
           > Last-domain.txt
-
-          echo "读取 Fission_domain.txt 文件并使用 httpx 进行探测..."
-          while read domain; do
-            echo "正在检测域名: $domain"
-            # 使用 httpx 进行探测，如果返回状态码为 200 则写入 Last-domain.txt
-            if httpx -silent -mc 200 -u "$domain"; then
-              echo "$domain" | tee -a Last-domain.txt
-            fi
-          done < Fission_domain.txt
-
-          echo "域名检测完成，Last-domain.txt 已更新"
-
-
+          cat Fission_domain.txt | httpx -silent -mc 200 > Last-domain.txt
 
       - name: Remove protocol prefixes
         run: |
-          echo "去除协议前缀..."
           sed -i 's|^https://||g; s|^http://||g' Last-domain.txt
-          echo "协议前缀去除完成"
 
       - name: Commit and push changes
         run: |
-          echo "配置 git 用户信息..."
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-          # 提交 Last-domain.txt 文件
           git add Last-domain.txt
-          
-          # 如果有更改则提交
-          git commit -m "Update Last-domain.txt with domains without protocol" || echo "没有更改需要提交"
-          
-          # 推送更改
-          git push || echo "推送失败"
+          git commit -m "Update Last-domain.txt with domains without protocol"
+          git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

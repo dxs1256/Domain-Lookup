@@ -1,7 +1,6 @@
 name: Check Domains
 
 on:
-  workflow_dispatch:  # 手动触发
   repository_dispatch:
     types: [check-domains-trigger]
 
@@ -10,49 +9,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Install Go
       - name: Install Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.21'
 
-      # Step 3: Install httpx
       - name: Install httpx
         run: |
           go install github.com/projectdiscovery/httpx/cmd/httpx@latest
           echo "$HOME/go/bin" >> $GITHUB_PATH
 
-      # Step 4: Check domains and process Fission_domain.txt
       - name: Check domains
         run: |
-          echo "检查 Last-domain.txt 文件是否存在..."
           if [ ! -f Last-domain.txt ]; then
-            echo "Last-domain.txt 文件不存在，创建该文件..."
             touch Last-domain.txt
           fi
-
-          echo "清空 Last-domain.txt 文件..."
           > Last-domain.txt
+          cat Fission_domain.txt | httpx -ip -mc 200 > Last-domain.txt
 
-          echo "读取 Fission_domain.txt 并使用 httpx 进行探测..."
-          cat Fission_domain.txt | while read domain; do
-            echo "正在检测域名: $domain"
-            httpx -ip -websocket -asn -mc 200 -u "$domain" && echo "$domain 状态码为 200，已加入到 Last-domain.txt"
-          done
-
-          echo "操作完成，Last-domain.txt 已更新。"
-        shell: /usr/bin/bash -e {0}
-
-      # Step 5: Remove protocol prefixes from the domains in Last-domain.txt
       - name: Remove protocol prefixes
         run: |
           sed -i 's|^https://||g; s|^http://||g' Last-domain.txt
 
-      # Step 6: Commit and push changes to the repository
       - name: Commit and push changes
         run: |
           git config --global user.name "github-actions[bot]"

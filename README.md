@@ -1,6 +1,6 @@
 # 项目说明
 
-该项目旨在获取并反查 IP 地址，以获取大量域名，并验证这些域名的可用性。IP 地址的获取部分由 GitHub Actions 自动从 [https://www.wetest.vip/page/cloudflare/address_v4.html](https://www.wetest.vip/page/cloudflare/address_v4.html) 抓取三个 IP 地址。本项目支持通过 GitHub Actions 实现自动化部署。
+该项目旨在获取并反查 IP 地址，以获取大量域名，并验证这些域名的可用性。IP 地址的获取部分由 GitHub Actions 自动从 [https://www.wetest.vip/page/cloudflare/address_v4.html](https://www.wetest.vip/page/cloudflare/address_v4.html) 抓取三个 IP 地址。本项目支持通过 GitHub Actions 自动化部署。
 
 ## 文件说明
 

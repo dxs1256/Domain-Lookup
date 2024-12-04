@@ -2,7 +2,7 @@ name: Update Fission IP
 
 on:
   schedule:
-    - cron: '0 */4 * * *'  # 每天定时运行一次，或根据需要调整
+    - cron: '0 0 * * *'  # UTC 时间 00:00 对应北京时间 08:00
   workflow_dispatch:  # 允许手动触发
 
 jobs:

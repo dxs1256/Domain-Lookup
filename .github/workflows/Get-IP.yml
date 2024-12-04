@@ -35,6 +35,7 @@ jobs:
 
     - name: Run Python script directly in workflow
       run: |
+        echo "Running the Python scraping script..."
         python -c "
 import time
 from selenium import webdriver
@@ -101,8 +102,4 @@ if __name__ == '__main__':
         echo "Committing changes to GitHub..."
         git config --global user.name "github-actions"
         git config --global user.email "github-actions@github.com"
-        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-        git add Fission_ip.txt
-        git commit -m "Update Fission_ip.txt with top 3 IP addresses"
-        git push
-        echo "Changes pushed to repository."
+        git remote set-url origin https://x-access-token:${

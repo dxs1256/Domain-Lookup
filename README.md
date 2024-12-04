@@ -5,7 +5,7 @@
 ## 文件说明
 
 ### Fission_ip.txt
-- **内容**：自动抓取取的 IP 地址列表。  
+- **内容**：自动抓取到的 IP 地址列表。  
 
 ### Fission_domain.txt
 - **内容**：通过反查 `Fission_ip.txt` 中的 IP 地址获取到的域名列表。

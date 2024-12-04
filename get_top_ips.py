@@ -47,8 +47,8 @@ def get_top_ips():
     for ip in top_ips:
         print(ip)
 
-    # 将前三个 IP 地址保存到 Get-IP.txt 文件
-    with open('Get-IP.txt', 'w') as file:
+    # 将前三个 IP 地址保存到 Fission_ip.txt 文件
+    with open('Fission_ip.txt', 'w') as file:
         for ip in top_ips:
             file.write(f"{ip}\n")
 

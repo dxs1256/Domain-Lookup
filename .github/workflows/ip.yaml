@@ -1,9 +1,10 @@
 name: Update Fission IPPPPP
+# 抓取联通三个IP
 
 #on:
-   schedule:
-    - cron: '0 */4 * * *'  # 每4小时运行一次
-   workflow_dispatch:  # 手动触发
+#  schedule:
+#    - cron: '0 */4 * * *'  # 每天定时运行一次，或根据需要调整
+#  workflow_dispatch:  # 允许手动触发
 
 jobs:
   update-ip:

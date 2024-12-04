@@ -1,5 +1,3 @@
-# Fission Project
-
 该项目旨在获取并反查 Cloudflare IP 地址，以获取大量域名，并验证这些域名的可用性。
 
 ## 工具说明

@@ -25,6 +25,7 @@
 - 由于网络环境和 Cloudflare 的动态性，获取的 IP 地址和域名列表可能会随时间变化。
 - 请遵守相关法律法规，不要将此工具用于非法用途。
 
-## 版权声明
+## 感谢
 
-本项目为开源项目，您可以自由使用和修改，但请保留原作者信息和版权声明。
+感谢原项目作者 [snowfal1](https://github.com/snowfal1) 提供的开源项目 [CloudflareCDNFission](https://github.com/snowfal1/CloudflareCDNFission)，为本项目提供了重要的技术支持和灵感。
+

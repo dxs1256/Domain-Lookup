@@ -1,4 +1,4 @@
-name: Update Fission IP
+name: Get-IP
 
 on:
 #  schedule:

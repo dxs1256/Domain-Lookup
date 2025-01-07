@@ -23,7 +23,7 @@ jobs:
           sudo apt-get clean
 
       # 获取数据并写入文件
-      - name: Fetch IP and Update File
+      - name: Fetch IP 和 Update File
         run: |
           URL="https://www.wetest.vip/page/cloudflare/address_v4.html"
           OUTPUT_FILE="Fission_ip.txt"
@@ -40,7 +40,7 @@ jobs:
           done
 
       # 提交更改
-      - name: Commit and Push Changes
+      - name: Commit 和 Push Changes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -57,7 +57,7 @@ jobs:
           fi
 
       # 等待 5 秒
-      - name: Wait 5 seconds
+      - name: Wait 5 秒之前
         run: sleep 5
 
       # 触发 bestdns.yaml
@@ -91,7 +91,7 @@ jobs:
           sudo apt-get clean
 
       # 获取数据并写入文件
-      - name: Fetch IP and Update File
+      - name: Fetch IP 和 Update File
         run: |
           URL="https://www.wetest.vip/page/cloudflare/address_v4.html"
           OUTPUT_FILE="Fission_ip.txt"
@@ -108,7 +108,7 @@ jobs:
           done
 
       # 提交更改
-      - name: Commit and Push Changes
+      - name: Commit 和 Push Changes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -125,7 +125,7 @@ jobs:
           fi
 
       # 等待 5 秒
-      - name: Wait 5 seconds
+      - name: Wait 5 秒之前
         run: sleep 5
 
       # 触发 bestdns.yaml
@@ -134,4 +134,4 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           event-type: bestdns-update # 自定义事件名称
->>>>>>> Stashed changes
+         Stashed changes

@@ -1,0 +1,53 @@
+name: Check Domains
+
+on:
+  workflow_dispatch:  # 手动触发
+  repository_dispatch:
+    types: [check-domains-trigger]
+
+jobs:
+  check-domains:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Install httpx
+        run: |
+          go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+
+      - name: Check domains
+        run: |
+          if [ ! -f Last-domain.txt ]; then
+            touch Last-domain.txt
+          fi
+          > Last-domain.txt
+          cat Fission_domain.txt | httpx -silent -mc 200 > Last-domain.txt
+
+      - name: Remove protocol prefixes
+        run: |
+          sed -i 's|^https://||g; s|^http://||g' Last-domain.txt
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add Last-domain.txt
+          git commit -m "Update Last-domain.txt with domains without protocol"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete Old Workflows
+        uses: Mattraks/delete-workflow-runs@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          retain_days: 2
+          keep_minimum_runs: 0

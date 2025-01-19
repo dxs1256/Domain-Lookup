@@ -40,9 +40,9 @@ jobs:
           
           # 检查文件是否有更改，并设置输出变量
           if ! git diff --quiet; then
-             echo "::set-output name=ip_changed::false"
+             echo "ip_changed=false" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=ip_changed::true"
+             echo "ip_changed=true" >> $GITHUB_OUTPUT
           fi
 
       # 4.  设置 Python 环境 (仅当 IP 发生变化时)
@@ -100,9 +100,12 @@ jobs:
       - name: Install httpx
         run: |
           go install github.com/projectdiscovery/httpx/cmd/httpx@latest
-          echo "$HOME/go/bin" >> $GITHUB_PATH
-
-      # 12. 检查域名
+          
+      # 12. Add Go bin to PATH
+      - name: Add Go bin to PATH
+        run: echo "$HOME/go/bin" >> $GITHUB_PATH
+      
+      # 13. 检查域名
       - name: Check domains
         run: |
           if [ ! -f Last-domain.txt ]; then
@@ -111,12 +114,12 @@ jobs:
           > Last-domain.txt
           cat Fission_domain.txt | httpx -silent -mc 200 > Last-domain.txt
 
-      # 13. 移除协议前缀
+      # 14. 移除协议前缀
       - name: Remove protocol prefixes
         run: |
           sed -i 's|^https://||g; s|^http://||g' Last-domain.txt
           
-      # 14. Check for changes
+      # 15. Check for changes
       - name: Check for changes
         id: check_changes
         run: |
@@ -124,6 +127,7 @@ jobs:
           if [[ -z $(git status --porcelain) ]]; then
             echo "No changes detected"
             echo "changes=false" >> $GITHUB_OUTPUT
+            echo "commit_message=" >> $GITHUB_OUTPUT
           else
             echo "Changes detected"
             echo "changes=true" >> $GITHUB_OUTPUT
@@ -131,16 +135,16 @@ jobs:
             echo "commit_message=$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
           fi
 
-      # 15. 提交更改
+      # 16. 提交更改
       - name: Commit and Push Changes
         if: steps.check_changes.outputs.changes == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git commit -m "${{ steps.check_changes.outputs.commit_message }}"
-          git push
+          git push origin HEAD:main
       
-      # 16. 删除旧的工作流运行记录
+      # 17. 删除旧的工作流运行记录
       - name: Delete workflow runs
         uses: Mattraks/delete-workflow-runs@v2
         with:
@@ -148,3 +152,5 @@ jobs:
           repository: ${{ github.repository }}
           retain_days: 2
           keep_minimum_runs: 0
+        permissions:
+          actions: write

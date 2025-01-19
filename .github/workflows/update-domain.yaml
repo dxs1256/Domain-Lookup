@@ -106,12 +106,12 @@ jobs:
         run: python Fission.py
 
       # 12. 提交输出文件 (仅当脚本执行成功且IP发生变化时)
-       - name: Commit BestDNS Changes
-         if: ${{ steps.run-fission-script.outcome == 'success' && steps.fetch-ip.outputs.ip_changed == 'true' }}
-         run: |
-            git add Fission_domain.txt
-            git commit -m "Update output files from Fission.py execution [skip ci]"
-            git push origin HEAD:main
+      - name: Commit BestDNS Changes
+        if: ${{ steps.run-fission-script.outcome == 'success' && steps.fetch-ip.outputs.ip_changed == 'true' }}
+        run: |
+          git add Fission_domain.txt
+          git commit -m "Update output files from Fission.py execution [skip ci]"
+          git push origin HEAD:main
 
       # 13. 安装 Go
       - name: Install Go
@@ -144,7 +144,13 @@ jobs:
       # 18. 提交域名检查结果
       - name: Commit Domain Check Result
         run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add Last-domain.txt
+          
+          # 先拉取远程仓库的更改
+          git pull --rebase origin main
+
           git commit -m "Update Last-domain.txt with domains without protocol"
           git push origin HEAD:main
       

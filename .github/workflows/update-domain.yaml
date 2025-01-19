@@ -141,9 +141,10 @@ jobs:
           git push
       
       # 16. 删除旧的工作流运行记录
-      - name: Delete Old Workflows
-        uses: Mattraks/delete-workflow-runs@main
+      - name: Delete workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
         with:
-         token: ${{ secrets.GITHUB_TOKEN }}
-         retain_days: 2
-         keep_minimum_runs: 0
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 2
+          keep_minimum_runs: 0

@@ -127,7 +127,7 @@ jobs:
           else
             echo "Changes detected"
             echo "changes=true" >> $GITHUB_OUTPUT
-            COMMIT_MESSAGE="Update live.m3u, live.txt and function.log $(date +'%Y-%m-%d %H:%M:%S')"
+            COMMIT_MESSAGE="Update $(date +'%Y-%m-%d %H:%M:%S')"
             echo "commit_message=$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
           fi
 

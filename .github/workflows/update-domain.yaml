@@ -1,4 +1,4 @@
-name: Update-Domain
+name: 更新 Domain 记录
 
 on:
   schedule:

@@ -9,8 +9,7 @@ jobs:
   full-update:
     runs-on: ubuntu-latest
     permissions:
-      actions: write
-      contents: read
+      contents: write
 
     steps:
       # 1. 检出代码仓库

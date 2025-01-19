@@ -18,21 +18,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests jq
 
-      - name: 读取 Fission_ip.txt 中的 IP 地址
-        id: read_ip
+      - name: 获取 Cloudflare IPv4 地址
+        id: get_cloudflare_ips
         run: |
-          # 读取 Fission_ip.txt 中的 IP 地址并处理
-          IP_ADDRESSES=$(cat Fission_ip.txt | tr '\n' ',')  # 用逗号连接多个 IP 地址
-          echo "IP 地址：$IP_ADDRESSES"
-          echo "IP_ADDRESSES=$IP_ADDRESSES" >> $GITHUB_ENV  # 设置环境变量
+          # 使用 curl 获取网页内容
+          WEBPAGE_CONTENT=$(curl -s https://www.wetest.vip/page/cloudflare/address_v4.html)
 
-      - name: 清除现有 DNS 记录（保留指定 IP）
+          # 使用 grep 和 sed 提取 IP 地址并用逗号分隔
+          IP_ADDRESSES=$(echo "$WEBPAGE_CONTENT" | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | tr '\n' ',' | sed 's/,$//')
+
+          # 输出提取到的 IP 地址
+          echo "IP 地址：$IP_ADDRESSES"
+
+          # 设置环境变量
+          echo "IP_ADDRESSES=$IP_ADDRESSES" >> $GITHUB_ENV
+
+      - name: 获取 Cloudflare DNS 记录并清理
         run: |
           # 从 Secrets 中获取 Cloudflare 配置信息
           CF_API_KEY="${{ secrets.CF_API_KEY }}"
           CF_ZONE_ID="${{ secrets.CF_ZONE_ID }}"
           CF_DOMAIN_NAME="${{ secrets.CF_DOMAIN_NAME }}"
-
+          
           # 设置 API 请求头
           headers="Authorization: Bearer $CF_API_KEY"
           
@@ -44,10 +51,15 @@ jobs:
           record_ids=$(echo "$response" | jq -r '.result[] | select(.name == "'"$CF_DOMAIN_NAME"'") | select(.content != "74.48.144.51") | .id')
           
           # 删除旧的 DNS 记录
-          for record_id in $record_ids; do
-            curl -s -X DELETE "$dns_records_url/$record_id" -H "$headers"
-            echo "Deleted DNS record: $record_id"
-          done
+          if [[ -n "$record_ids" ]]; then
+            for record_id in $record_ids; do
+              curl -s -X DELETE "$dns_records_url/$record_id" -H "$headers"
+              echo "Deleted DNS record: $record_id"
+            done
+          else
+            echo "No DNS records to delete (except for the specified IP)."
+          fi
+
 
       - name: 更新 Cloudflare DNS 记录
         run: |
@@ -56,14 +68,20 @@ jobs:
           CF_ZONE_ID="${{ secrets.CF_ZONE_ID }}"
           CF_DOMAIN_NAME="${{ secrets.CF_DOMAIN_NAME }}"
           dns_records_url="https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records"
-          
+
           # 获取从文件读取的 IP 地址
           IP_ADDRESSES="${{ env.IP_ADDRESSES }}"
-          
+        
+          # 检查 IP_ADDRESSES 是否为空
+          if [[ -z "$IP_ADDRESSES" ]]; then
+             echo "No IP addresses to add from https://www.wetest.vip/page/cloudflare/address_v4.html. Exiting."
+             exit 0
+          fi
+        
           # 遍历每个 IP 地址并更新 DNS 记录
           for IP in $(echo $IP_ADDRESSES | tr ',' '\n'); do
             # 确保 IP 格式正确，使用正则表达式检查
-            if [[ ! $IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            if [[ ! $IP =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
               echo "Invalid IP address format: $IP. Skipping."
               continue
             fi

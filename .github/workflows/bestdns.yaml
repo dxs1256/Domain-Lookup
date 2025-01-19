@@ -1,4 +1,4 @@
-name: Update BestDNS
+name: 解析域名
 
 on:
   repository_dispatch:

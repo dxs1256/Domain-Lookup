@@ -1,4 +1,4 @@
-name: Fission IP, BestDNS & Domain Check
+name: Update-Domain
 
 on:
   schedule:

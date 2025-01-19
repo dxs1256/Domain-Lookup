@@ -40,9 +40,9 @@ jobs:
           
           # 检查文件是否有更改，并设置输出变量
           if ! git diff --quiet; then
-             echo "::set-output name=ip_changed::true"
+             echo "ip_changed=true" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=ip_changed::false"
+            echo "ip_changed=false" >> $GITHUB_OUTPUT
           fi
 
       # 4. 如果 IP 发生变化，则提交更改

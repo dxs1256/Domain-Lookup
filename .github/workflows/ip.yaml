@@ -1,4 +1,4 @@
-name: Update Fission IP
+name: 提取 IP
 
 on:
   schedule:

@@ -9,7 +9,8 @@ jobs:
   full-update:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      actions: write
+      contents: read
 
     steps:
       # 1. 检出代码仓库
@@ -147,8 +148,9 @@ jobs:
       
       # 17. 删除旧的工作流运行记录
       - name: Delete Old Workflows
-        uses: Mattraks/delete-workflow-runs@main
+        uses: Mattraks/delete-workflow-runs@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
           retain_days: 2
           keep_minimum_runs: 0

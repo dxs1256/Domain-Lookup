@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write # 在这里定义权限
 
     steps:
       # 1. 检出代码仓库
@@ -152,5 +153,3 @@ jobs:
           repository: ${{ github.repository }}
           retain_days: 2
           keep_minimum_runs: 0
-        permissions:
-          actions: write

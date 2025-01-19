@@ -2,7 +2,7 @@ name: 更新 Cloudflare DNS 记录
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # 每天零点运行
+    - cron: '*/30 * * * *'  # 每30分钟运行
   workflow_dispatch:
 
 jobs:

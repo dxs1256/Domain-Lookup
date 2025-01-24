@@ -11,6 +11,10 @@ permissions:
 jobs:
   full-pipeline:
     runs-on: ubuntu-22.04  # 使用稳定的 Ubuntu 22.04
+    permissions:
+      actions: write
+      contents: write
+      workflow: write
 
     steps:
       # 检出代码库
@@ -29,7 +33,7 @@ jobs:
         run: |
           URL="https://www.wetest.vip/page/cloudflare/address_v4.html"
           OUTPUT_FILE="Fission_ip.txt"
-          echo -n > $OUTPUT_FILE # 清空文件内容
+          echo -n > $OUTPUT_FILE  # 清空文件内容
 
           # 循环提取每一行数据（从 tr[6] 到 tr[8]）
           for i in $(seq 6 8); do
@@ -116,7 +120,3 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           retain_days: 2
           keep_minimum_runs: 0
-        permissions:
-          actions: write
-          contents: write
-          workflow: write

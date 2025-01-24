@@ -1,25 +1,31 @@
-# 项目说明
+## 项目说明：IP 反查与域名可用性验证
 
-该项目旨在获取并反查 IP 地址，以获取大量域名，并验证这些域名的可用性。IP 地址的获取部分由 GitHub Actions 自动从 [https://www.wetest.vip/page/cloudflare/address_v4.html](https://www.wetest.vip/page/cloudflare/address_v4.html) 抓取三个 IP 地址。本项目支持通过 GitHub Actions 自动化部署。
+**项目目标：**
 
-## 文件说明
+本项目旨在通过 IP 反查获取大量域名，并验证这些域名的可用性，最终筛选出可用的域名列表。
 
-### Fission_ip.txt
-- **内容**：自动抓取到的 IP 地址列表。  
+**核心流程：**
 
-### Fission_domain.txt
-- **内容**：通过反查 `Fission_ip.txt` 中的 IP 地址获取到的域名列表。
+1.  **IP 地址抓取：**
+    *   使用 GitHub Actions 自动从网络抓取三个 IP 地址。
+    *   抓取结果保存至 `Fission_ip.txt` 文件。
+2.  **域名反查：**
+    *   使用 `Fission.py` 脚本，对 `Fission_ip.txt` 中的 IP 地址进行反查，获取域名列表。
+    *   反查结果保存至 `Fission_domain.txt` 文件。
+3.  **域名可用性检测：**
+    *   使用 `httpx` 工具，对 `Fission_domain.txt` 中的域名进行可用性检测，筛选出 HTTP 状态码为 200 的域名。
+    *   检测结果保存至 `Last-domain.txt` 文件。
 
-### Last-domain.txt
-- **内容**：最终筛选出的可用域名列表（HTTP 状态码为 200）。
+**文件说明：**
 
-## 使用方法
+*   `Fission_ip.txt`: 自动抓取的 IP 地址列表。
+*   `Fission_domain.txt`: 通过反查 IP 地址获取的域名列表。
+*   `Last-domain.txt`: 最终筛选出的可用域名列表（HTTP 状态码为 200）。
 
-1. **IP 地址获取**：自动抓取 IP 地址并保存至 `Fission_ip.txt` 文件。
-2. **反查域名**：使用 `Fission.py` 脚本反查 `Fission_ip.txt` 中的 IP 地址，生成 `Fission_domain.txt` 文件。
-3. **域名检测**：使用 [httpx](https://github.com/projectdiscovery/httpx) 工具对 `Fission_domain.txt` 中的域名进行可用性检测，筛选出 HTTP 状态码为 200 的域名。将检测结果保存至 `Last-domain.txt` 文件中。
+**使用方法：**
 
-## 感谢
+本项目通过 GitHub Actions 实现自动化部署，无需手动执行脚本。
 
-感谢原项目作者 [snowfal1](https://github.com/snowfal1) 提供的开源项目 [CloudflareCDNFission](https://github.com/snowfal1/CloudflareCDNFission)，为本项目提供了重要的技术支持和灵感。
+**致谢：**
 
+感谢原项目作者 snowfal1 提供的开源项目 [CloudflareCDNFission](链接待补充)，为本项目提供了重要的技术支持和灵感。

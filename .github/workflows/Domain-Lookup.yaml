@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  full-pipeline:
+  Domain-Lookup:
     runs-on: ubuntu-latest
 
     steps:

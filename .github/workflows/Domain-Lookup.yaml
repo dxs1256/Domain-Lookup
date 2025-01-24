@@ -33,7 +33,7 @@ jobs:
           echo -n > $OUTPUT_FILE  # 清空文件内容
 
           # 循环提取每一行数据（从 tr[6] 到 tr[8]）
-          for i in $(seq 5 8); do
+          for i in $(seq 6 8); do
             DATA=$(curl -s "$URL" | xmllint --html --xpath "string(/html/body/div[2]/div[2]/div/div[2]/div[2]/table/tbody/tr[$i]/td[2])" - 2>/dev/null)
             
             # 使用正则表达式来验证是否是有效的 IP 地址

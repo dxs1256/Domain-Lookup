@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write  # 允许读写仓库内容
+  actions: write   # 允许操作工作流
 
 jobs:
   full-pipeline:
@@ -114,5 +115,6 @@ jobs:
         uses: Mattraks/delete-workflow-runs@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
           retain_days: 2
           keep_minimum_runs: 0

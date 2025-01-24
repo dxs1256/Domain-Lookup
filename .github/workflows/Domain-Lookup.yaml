@@ -119,7 +119,7 @@ jobs:
 
       # 清理旧工作流记录
       - name: Delete Old Workflows
-        uses: Mattraks/delete-workflow-runs@main
+        uses: Mattraks/delete-workflow-runs@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           retain_days: 2

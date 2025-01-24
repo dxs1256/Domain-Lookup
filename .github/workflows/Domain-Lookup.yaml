@@ -4,14 +4,15 @@ on:
   schedule:
     - cron: '0 0 * * *'  # 每天 0 点运行一次
   workflow_dispatch:  # 手动触发
+  repository_dispatch:
+    types: [bestdns-update, check-domains-trigger]
 
 permissions:
-  contents: write  # 允许读写仓库内容
-  actions: write   # 允许操作工作流
+  contents: write
 
 jobs:
   full-pipeline:
-    runs-on: ubuntu-22.04  # 使用稳定的 Ubuntu 22.04
+    runs-on: ubuntu-latest
 
     steps:
       # 检出代码库
@@ -30,7 +31,7 @@ jobs:
         run: |
           URL="https://www.wetest.vip/page/cloudflare/address_v4.html"
           OUTPUT_FILE="Fission_ip.txt"
-          echo -n > $OUTPUT_FILE  # 清空文件内容
+          echo -n > $OUTPUT_FILE # 清空文件内容
 
           # 循环提取每一行数据（从 tr[6] 到 tr[8]）
           for i in $(seq 6 8); do
@@ -42,16 +43,41 @@ jobs:
             fi
           done
 
+      # 提交更改
+      - name: Commit and Push Changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 检查文件是否有更改
+          if ! git diff --quiet; then
+            git add Fission_ip.txt
+            git commit -m "Update Fission_ip.txt with latest IPs"
+            git push origin HEAD:main
+          else
+            echo "No changes detected, skipping commit."
+          fi
+
       # 解析域名
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-python-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-python-
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests lxml fake_useragent
+          pip install -r requirements.txt
 
       - name: Verify and prepare input files
         run: |
@@ -67,6 +93,17 @@ jobs:
       - name: Run Fission script
         id: run-fission-script
         run: python Fission.py
+
+      - name: Commit and push output files
+        if: steps.run-fission-script.outcome == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 添加并提交更改
+          git add Fission_domain.txt
+          git commit -m "Update output files from Fission.py execution [skip ci]"
+          git push
 
       # 验证域名可用性
       - name: Install Go
@@ -91,30 +128,23 @@ jobs:
         run: |
           sed -i 's|^https://||g; s|^http://||g' Last-domain.txt
 
-      # 提交所有更改
-      - name: Commit and Push All Changes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit and push changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # 添加所有更改的文件
-          git add Fission_ip.txt Fission_domain.txt Last-domain.txt
-          
-          # 检查是否有更改
-          if ! git diff --quiet; then
-            git commit -m "Update all files with extracted IPs, domains, and checked domains"
-            git push origin HEAD:main
-          else
+          git add Last-domain.txt
+          if git diff --quiet; then
             echo "No changes detected, skipping commit."
+          else
+            git commit -m "Update Last-domain.txt with domains without protocol"
+            git push
           fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 清理旧工作流记录
       - name: Delete Old Workflows
-        uses: Mattraks/delete-workflow-runs@v2
+        uses: Mattraks/delete-workflow-runs@main
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.repository }}
           retain_days: 2
           keep_minimum_runs: 0

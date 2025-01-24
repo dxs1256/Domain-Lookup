@@ -2,8 +2,8 @@ name: 提取 IP、解析域名和验证域名可用性
 
 on:
   schedule:
-    - cron: '0 */4 * * *'  # 每4小时运行一次
-  workflow_dispatch:  # 手动触发
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,52 +13,43 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 检出代码库
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      # 安装 curl 和 xmllint
       - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y curl libxml2-utils
           sudo apt-get clean
 
-      # 获取数据并写入文件
       - name: Fetch IP and Update File
         run: |
+          set -e
           URL="https://www.wetest.vip/page/cloudflare/address_v4.html"
           OUTPUT_FILE="Fission_ip.txt"
-          echo -n > $OUTPUT_FILE # 清空文件内容
+          echo -n > $OUTPUT_FILE
 
-          # 循环提取每一行数据（从 tr[6] 到 tr[8]）
           for i in $(seq 6 8); do
             DATA=$(curl -s "$URL" | xmllint --html --xpath "string(/html/body/div[2]/div[2]/div/div[2]/div[2]/table/tbody/tr[$i]/td[2])" - 2>/dev/null)
-            
-            # 使用正则表达式来验证是否是有效的 IP 地址
             if echo "$DATA" | grep -Pq '^(\d{1,3}\.){3}\d{1,3}$'; then
               echo "$DATA" >> $OUTPUT_FILE
             fi
           done
 
-      # 提交更改
-      - name: Commit and Push Changes
+      - name: Commit and Push IP Changes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # 检查文件是否有更改
           if ! git diff --quiet; then
             git add Fission_ip.txt
             git commit -m "Update Fission_ip.txt with latest IPs"
             git push origin HEAD:main
           else
-            echo "No changes detected, skipping commit."
+            echo "No changes detected for Fission_ip.txt, skipping commit."
           fi
 
-      # 解析域名
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -71,31 +62,26 @@ jobs:
 
       - name: Verify and prepare input files
         run: |
-          # 检查 Fission_ip.txt 是否存在
+          set -e
           if [ ! -f "Fission_ip.txt" ]; then
             echo "Error: Fission_ip.txt not found. Please include this file in the repository." >&2
             exit 1
           fi
-
-          # 确保 Fission_domain.txt 存在，如果没有则创建
           touch Fission_domain.txt
 
       - name: Run Fission script
         id: run-fission-script
         run: python Fission.py
 
-      - name: Commit and push output files
+      - name: Commit and push domain output files
         if: steps.run-fission-script.outcome == 'success'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # 添加并提交更改
           git add Fission_domain.txt
-          git commit -m "Update output files from Fission.py execution [skip ci]"
+          git commit -m "Update output files from Fission.py execution"
           git push
 
-      # 验证域名可用性
       - name: Install Go
         uses: actions/setup-go@v4
         with:
@@ -111,26 +97,26 @@ jobs:
           if [ ! -f Last-domain.txt ]; then
             touch Last-domain.txt
           fi
-          > Last-domain.txt
-          cat Fission_domain.txt | httpx -silent -mc 200 > Last-domain.txt
+          
+          # 使用 httpx -json 并且只输出 200 状态码的域名
+          cat Fission_domain.txt | httpx -silent -mc 200 -json > output.json
+          
+          # 使用 jq 提取域名并保存到 Last-domain.txt
+          jq -r '.url' output.json | sed 's|^https://||g; s|^http://||g' > Last-domain.txt
 
-      - name: Remove protocol prefixes
-        run: |
-          sed -i 's|^https://||g; s|^http://||g' Last-domain.txt
-
-      - name: Commit and push changes
+      - name: Commit and push domain check output files
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add Last-domain.txt
-          if git diff --quiet; then
-            echo "No changes detected, skipping commit."
+           if git diff --quiet; then
+            echo "No changes detected for Last-domain.txt, skipping commit."
           else
             git commit -m "Update Last-domain.txt with domains without protocol"
             git push
           fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Delete Old Workflows
         uses: Mattraks/delete-workflow-runs@main

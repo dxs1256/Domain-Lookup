@@ -41,23 +41,6 @@ jobs:
             fi
           done
 
-      # 提交更改
-      - name: Commit and Push Changes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # 检查文件是否有更改
-          if ! git diff --quiet; then
-            git add Fission_ip.txt
-            git commit -m "Update Fission_ip.txt with latest IPs"
-            git push origin HEAD:main
-          else
-            echo "No changes detected, skipping commit."
-          fi
-
       # 解析域名
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -92,17 +75,6 @@ jobs:
         id: run-fission-script
         run: python Fission.py
 
-      - name: Commit and push output files
-        if: steps.run-fission-script.outcome == 'success'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # 添加并提交更改
-          git add Fission_domain.txt
-          git commit -m "Update output files from Fission.py execution [skip ci]"
-          git push
-
       # 验证域名可用性
       - name: Install Go
         uses: actions/setup-go@v4
@@ -126,20 +98,26 @@ jobs:
         run: |
           sed -i 's|^https://||g; s|^http://||g' Last-domain.txt
 
-      - name: Commit and push changes
+      # 提交所有更改
+      - name: Commit and Push All Changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add Last-domain.txt
-          if git diff --quiet; then
-            echo "No changes detected, skipping commit."
+          
+          # 添加所有更改的文件
+          git add Fission_ip.txt Fission_domain.txt Last-domain.txt
+          
+          # 检查是否有更改
+          if ! git diff --quiet; then
+            git commit -m "Update all files with extracted IPs, domains, and checked domains"
+            git push origin HEAD:main
           else
-            git commit -m "Update Last-domain.txt with domains without protocol"
-            git push
+            echo "No changes detected, skipping commit."
           fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # 清理旧工作流记录
       - name: Delete Old Workflows
         uses: Mattraks/delete-workflow-runs@main
         with:

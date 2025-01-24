@@ -11,10 +11,6 @@ permissions:
 jobs:
   full-pipeline:
     runs-on: ubuntu-22.04  # 使用稳定的 Ubuntu 22.04
-    permissions:
-      actions: write
-      contents: write
-      workflow: write
 
     steps:
       # 检出代码库

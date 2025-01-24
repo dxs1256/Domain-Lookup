@@ -14,12 +14,6 @@ jobs:
   full-pipeline:
     runs-on: ubuntu-latest
 
-    env:
-      URL: "https://www.wetest.vip/page/cloudflare/address_v4.html"
-      OUTPUT_FILE: "Fission_ip.txt"
-      DOMAIN_FILE: "Fission_domain.txt"
-      LAST_DOMAIN_FILE: "Last-domain.txt"
-
     steps:
       # 检出代码库
       - name: Checkout Repository
@@ -35,6 +29,8 @@ jobs:
       # 获取数据并写入文件
       - name: Fetch IP and Update File
         run: |
+          URL="https://www.wetest.vip/page/cloudflare/address_v4.html"
+          OUTPUT_FILE="Fission_ip.txt"
           echo -n > $OUTPUT_FILE # 清空文件内容
 
           # 循环提取每一行数据（从 tr[6] 到 tr[8]）
@@ -46,52 +42,25 @@ jobs:
               echo "$DATA" >> $OUTPUT_FILE
             fi
           done
-      
-      - name: Commit IP File
-        uses: actions/github-script@v6
+
+      # 提交更改
+      - name: Commit and Push Changes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-           script: |
-              const fileExists = await github.rest.repos.getContent({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                path: '${{ env.OUTPUT_FILE }}',
-              }).then(() => true).catch(() => false)
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 检查文件是否有更改
+          if ! git diff --quiet; then
+            git add Fission_ip.txt
+            git commit -m "Update Fission_ip.txt with latest IPs"
+            git push origin HEAD:main
+          else
+            echo "No changes detected, skipping commit."
+          fi
 
-              if (fileExists){
-                const hasChanges = await github.rest.repos.compareCommits({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    base: context.sha,
-                    head: 'HEAD'
-                }).then( res => {
-                  return res.data.files.some(file => file.filename == '${{ env.OUTPUT_FILE }}')
-                });
-                if(hasChanges) {
-                  console.log("committing IP file");
-                  await github.rest.repos.createOrUpdateFileContents({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    path: '${{ env.OUTPUT_FILE }}',
-                    message: 'Update ${{ env.OUTPUT_FILE }} with latest IPs',
-                    content: Buffer.from(require('fs').readFileSync('${{ env.OUTPUT_FILE }}')).toString('base64'),
-                    sha: (await github.rest.repos.getContent({
-                        owner: context.repo.owner,
-                        repo: context.repo.repo,
-                        path: '${{ env.OUTPUT_FILE }}'
-                    }).then(res => res.data.sha).catch(() => undefined)),
-                    committer: {
-                      name: 'github-actions[bot]',
-                      email: 'github-actions[bot]@users.noreply.github.com',
-                    }
-                  });
-                }else{
-                 console.log("No changes detected in ${{ env.OUTPUT_FILE }}, skipping commit.");
-                }
-              }
-      
-      # 设置 Python
+      # 解析域名
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -101,9 +70,9 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-python-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
-            ${{ runner.os }}-pip-
+            ${{ runner.os }}-python-
 
       - name: Install Python dependencies
         run: |
@@ -113,56 +82,28 @@ jobs:
       - name: Verify and prepare input files
         run: |
           # 检查 Fission_ip.txt 是否存在
-          if [ ! -f "$OUTPUT_FILE" ]; then
-            echo "Error: $OUTPUT_FILE not found. Please include this file in the repository." >&2
+          if [ ! -f "Fission_ip.txt" ]; then
+            echo "Error: Fission_ip.txt not found. Please include this file in the repository." >&2
             exit 1
           fi
 
           # 确保 Fission_domain.txt 存在，如果没有则创建
-          touch $DOMAIN_FILE
+          touch Fission_domain.txt
 
       - name: Run Fission script
         id: run-fission-script
         run: python Fission.py
-        continue-on-error: true # 设置错误不终止后续步骤
 
-      - name: Commit Domain File
-        uses: actions/github-script@v6
+      - name: Commit and push output files
         if: steps.run-fission-script.outcome == 'success'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-           script: |
-              const fileExists = await github.rest.repos.getContent({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                path: '${{ env.DOMAIN_FILE }}',
-              }).then(() => true).catch(() => false)
-              if (fileExists){
-                   const content = require('fs').readFileSync('${{ env.DOMAIN_FILE }}', 'utf8')
-                  if (content.trim() !== ''){ // 检查文件是否为空
-                      console.log("committing domain file")
-                      await github.rest.repos.createOrUpdateFileContents({
-                        owner: context.repo.owner,
-                        repo: context.repo.repo,
-                        path: '${{ env.DOMAIN_FILE }}',
-                        message: 'Update output files from Fission.py execution [skip ci]',
-                        content: Buffer.from(content).toString('base64'),
-                        sha: (await github.rest.repos.getContent({
-                            owner: context.repo.owner,
-                            repo: context.repo.repo,
-                            path: '${{ env.DOMAIN_FILE }}'
-                        }).then(res => res.data.sha).catch(() => undefined)),
-                        committer: {
-                          name: 'github-actions[bot]',
-                          email: 'github-actions[bot]@users.noreply.github.com',
-                        }
-                      });
-                    }else{
-                      console.log("Domain file is empty, skipping commit.");
-                   }
-              }
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # 添加并提交更改
+          git add Fission_domain.txt
+          git commit -m "Update output files from Fission.py execution [skip ci]"
+          git push
 
       # 验证域名可用性
       - name: Install Go
@@ -177,59 +118,29 @@ jobs:
 
       - name: Check domains
         run: |
-          if [ ! -f "$LAST_DOMAIN_FILE" ]; then
-            touch "$LAST_DOMAIN_FILE"
+          if [ ! -f Last-domain.txt ]; then
+            touch Last-domain.txt
           fi
-          > "$LAST_DOMAIN_FILE"
-          cat $DOMAIN_FILE | httpx -silent -mc 200 -threads 50 -timeout 5 > "$LAST_DOMAIN_FILE"
+          > Last-domain.txt
+          cat Fission_domain.txt | httpx -silent -mc 200 > Last-domain.txt
 
       - name: Remove protocol prefixes
         run: |
-          sed -i 's|^https://||g; s|^http://||g' "$LAST_DOMAIN_FILE"
-      
-      - name: Commit Last Domain File
-        uses: actions/github-script@v6
+          sed -i 's|^https://||g; s|^http://||g' Last-domain.txt
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add Last-domain.txt
+          if git diff --quiet; then
+            echo "No changes detected, skipping commit."
+          else
+            git commit -m "Update Last-domain.txt with domains without protocol"
+            git push
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-           script: |
-              const fileExists = await github.rest.repos.getContent({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                path: '${{ env.LAST_DOMAIN_FILE }}',
-              }).then(() => true).catch(() => false)
-               if (fileExists){
-                const hasChanges = await github.rest.repos.compareCommits({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    base: context.sha,
-                    head: 'HEAD'
-                }).then( res => {
-                  return res.data.files.some(file => file.filename == '${{ env.LAST_DOMAIN_FILE }}')
-                });
-                if(hasChanges) {
-                 console.log("committing last domain file");
-                  await github.rest.repos.createOrUpdateFileContents({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    path: '${{ env.LAST_DOMAIN_FILE }}',
-                    message: 'Update Last-domain.txt with domains without protocol',
-                    content: Buffer.from(require('fs').readFileSync('${{ env.LAST_DOMAIN_FILE }}')).toString('base64'),
-                    sha: (await github.rest.repos.getContent({
-                        owner: context.repo.owner,
-                        repo: context.repo.repo,
-                        path: '${{ env.LAST_DOMAIN_FILE }}'
-                    }).then(res => res.data.sha).catch(() => undefined)),
-                   committer: {
-                      name: 'github-actions[bot]',
-                      email: 'github-actions[bot]@users.noreply.github.com',
-                    }
-                  });
-                }else{
-                  console.log("No changes detected in ${{ env.LAST_DOMAIN_FILE }}, skipping commit.");
-                }
-              }
-          
 
       - name: Delete Old Workflows
         uses: Mattraks/delete-workflow-runs@main

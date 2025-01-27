@@ -11,6 +11,8 @@ permissions:
 jobs:
   Domain-Lookup:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write  # 添加这一行，允许删除 workflow runs
 
     steps:
       - name: Checkout Repository

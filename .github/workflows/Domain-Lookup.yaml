@@ -12,7 +12,7 @@ jobs:
   Domain-Lookup:
     runs-on: ubuntu-latest
     permissions:
-      actions: write  # 添加这一行，允许删除 workflow runs
+      actions: write  # 修复：添加此行，赋予删除 workflow runs 的权限
 
     steps:
       - name: Checkout Repository
@@ -47,7 +47,7 @@ jobs:
           if ! git diff --quiet; then
             git add Fission_ip.txt
             git commit -m "Update Fission_ip.txt with latest IPs"
-            # 修改 git push 命令
+            # 修复：修改 git push 命令，使用 GITHUB_TOKEN 进行身份验证
             git push "https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
           else
             echo "No changes detected for Fission_ip.txt, skipping commit."
@@ -83,7 +83,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Fission_domain.txt
           git commit -m "Update output files from Fission.py execution"
-          # 修改 git push 命令
+           # 修复：修改 git push 命令，使用 GITHUB_TOKEN 进行身份验证
           git push "https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
 
       - name: Install Go
@@ -119,13 +119,12 @@ jobs:
             echo "No changes detected for Last-domain.txt, skipping commit."
           else
             git commit -m "Update Last-domain.txt with domains without protocol"
-            # 修改 git push 命令
+            # 修复：修改 git push 命令，使用 GITHUB_TOKEN 进行身份验证
             git push "https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
-
           fi
 
       - name: Delete Old Workflows
-        uses: Mattraks/delete-workflow-runs@main
+        uses: Mattraks/delete-workflow-runs@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           retain_days: 2

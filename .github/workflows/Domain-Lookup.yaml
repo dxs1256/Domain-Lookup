@@ -40,10 +40,11 @@ jobs:
             fi
           done
           if [ -s "$OUTPUT_FILE" ]; then
-            echo "::set-output name=ip_file_updated::true"
+            echo "ip_file_updated=true" >> $GITHUB_OUTPUT
+           
           else
            echo "No valid IPs were found. Skipping commit."
-           echo "::set-output name=ip_file_updated::false"
+            echo "ip_file_updated=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Commit and Push IP Changes
@@ -78,11 +79,11 @@ jobs:
         run: |
           if [ ! -f "Fission_ip.txt" ]; then
             echo "Error: Fission_ip.txt not found. Please include this file in the repository." >&2
-            echo "::set-output name=file_ready::false"
+            echo "file_ready=false" >> $GITHUB_OUTPUT
             exit 1
           fi
           touch Fission_domain.txt
-          echo "::set-output name=file_ready::true"
+          echo "file_ready=true" >> $GITHUB_OUTPUT
          
       - name: Run Fission script
         if: steps.prepare_files.outputs.file_ready == 'true'
@@ -90,10 +91,10 @@ jobs:
         run: |
           python Fission.py
           if [ -s "Fission_domain.txt" ]; then
-            echo "::set-output name=domain_file_updated::true"
+            echo "domain_file_updated=true" >> $GITHUB_OUTPUT
           else
             echo "Fission.py did not create domain file, skipping commit."
-            echo "::set-output name=domain_file_updated::false"
+            echo "domain_file_updated=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Commit and push domain output files
@@ -126,10 +127,10 @@ jobs:
           # 使用 jq 提取域名并保存到 Last-domain.txt
           jq -r '.url' output.json | sed 's|^https://||g; s|^http://||g' > Last-domain.txt
           if [ -s "Last-domain.txt" ]; then
-            echo "::set-output name=domain_check_updated::true"
+             echo "domain_check_updated=true" >> $GITHUB_OUTPUT
           else
             echo "No valid domain name was detected, skipping commit."
-            echo "::set-output name=domain_check_updated::false"
+            echo "domain_check_updated=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Commit and push domain check output files

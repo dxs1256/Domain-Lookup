@@ -47,7 +47,8 @@ jobs:
           if ! git diff --quiet; then
             git add Fission_ip.txt
             git commit -m "Update Fission_ip.txt with latest IPs"
-            git push origin HEAD:main
+            # 修改 git push 命令
+            git push "https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
           else
             echo "No changes detected for Fission_ip.txt, skipping commit."
           fi
@@ -82,7 +83,8 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Fission_domain.txt
           git commit -m "Update output files from Fission.py execution"
-          git push
+          # 修改 git push 命令
+          git push "https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
 
       - name: Install Go
         uses: actions/setup-go@v4
@@ -117,7 +119,9 @@ jobs:
             echo "No changes detected for Last-domain.txt, skipping commit."
           else
             git commit -m "Update Last-domain.txt with domains without protocol"
-            git push
+            # 修改 git push 命令
+            git push "https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
+
           fi
 
       - name: Delete Old Workflows

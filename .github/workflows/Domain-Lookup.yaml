@@ -113,13 +113,12 @@ jobs:
       - name: Install httpx
         run: |
           go install github.com/projectdiscovery/httpx/cmd/httpx@latest
-         
-
+          echo "$HOME/go/bin" >> $GITHUB_PATH
       - name: Check Domains and Update File
         id: check_domains
         run: |
           if [ ! -f "Last-domain.txt" ]; then
-             touch Last-domain.txt
+            touch Last-domain.txt
           fi
           # 使用 httpx -json 并且只输出 200 状态码的域名
           cat Fission_domain.txt | httpx -silent -mc 200 -json > output.json

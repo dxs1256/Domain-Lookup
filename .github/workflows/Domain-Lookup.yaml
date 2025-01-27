@@ -17,51 +17,39 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Setup Environment
+      - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y curl libxml2-utils
           sudo apt-get clean
-          echo "$HOME/go/bin" >> $GITHUB_PATH # Add go bin to path
-          
+
       - name: Fetch IP and Update File
-        id: fetch_ip
         run: |
+          set -e
           URL="https://www.wetest.vip/page/cloudflare/address_v4.html"
           OUTPUT_FILE="Fission_ip.txt"
-          echo -n > "$OUTPUT_FILE"
+          echo -n > $OUTPUT_FILE
 
           for i in $(seq 6 8); do
-            IP=$(curl -s "$URL" | xmllint --html --xpath "string(/html/body/div[2]/div[2]/div/div[2]/div[2]/table/tbody/tr[$i]/td[2])" - 2>/dev/null)
-            if echo "$IP" | grep -Pq '^(\d{1,3}\.){3}\d{1,3}$'; then
-              echo "$IP" >> "$OUTPUT_FILE"
-            else
-              echo "Invalid IP found: $IP, skipping..."
+            DATA=$(curl -s "$URL" | xmllint --html --xpath "string(/html/body/div[2]/div[2]/div/div[2]/div[2]/table/tbody/tr[$i]/td[2])" - 2>/dev/null)
+            if echo "$DATA" | grep -Pq '^(\d{1,3}\.){3}\d{1,3}$'; then
+              echo "$DATA" >> $OUTPUT_FILE
             fi
           done
-          if [ -s "$OUTPUT_FILE" ]; then
-            echo "::set-output name=ip_file_updated::true"
-          else
-           echo "No valid IPs were found. Skipping commit."
-           echo "::set-output name=ip_file_updated::false"
-          fi
 
       - name: Commit and Push IP Changes
-        if: steps.fetch_ip.outputs.ip_file_updated == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          git add Fission_ip.txt
           if ! git diff --quiet; then
-              git commit -m "Update Fission_ip.txt with latest IPs"
-              git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
+            git add Fission_ip.txt
+            git commit -m "Update Fission_ip.txt with latest IPs"
+            git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
           else
-             echo "No changes detected for Fission_ip.txt, skipping commit."
+            echo "No changes detected for Fission_ip.txt, skipping commit."
           fi
-
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -73,31 +61,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Verify and Prepare Input Files
-        id: prepare_files
+      - name: Verify and prepare input files
         run: |
+          set -e
           if [ ! -f "Fission_ip.txt" ]; then
             echo "Error: Fission_ip.txt not found. Please include this file in the repository." >&2
-            echo "::set-output name=file_ready::false"
             exit 1
           fi
           touch Fission_domain.txt
-          echo "::set-output name=file_ready::true"
-         
+
       - name: Run Fission script
-        if: steps.prepare_files.outputs.file_ready == 'true'
-        id: run_fission
-        run: |
-          python Fission.py
-          if [ -s "Fission_domain.txt" ]; then
-            echo "::set-output name=domain_file_updated::true"
-          else
-            echo "Fission.py did not create domain file, skipping commit."
-            echo "::set-output name=domain_file_updated::false"
-          fi
+        id: run-fission-script
+        run: python Fission.py
 
       - name: Commit and push domain output files
-        if: steps.run_fission.outputs.domain_file_updated == 'true'
+        if: steps.run-fission-script.outcome == 'success'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -113,44 +91,35 @@ jobs:
       - name: Install httpx
         run: |
           go install github.com/projectdiscovery/httpx/cmd/httpx@latest
-         
+          echo "$HOME/go/bin" >> $GITHUB_PATH
 
-      - name: Check Domains and Update File
-        id: check_domains
+      - name: Check domains
         run: |
-           if [ ! -f "Last-domain.txt" ]; then
+          if [ ! -f Last-domain.txt ]; then
             touch Last-domain.txt
           fi
+          
           # 使用 httpx -json 并且只输出 200 状态码的域名
           cat Fission_domain.txt | httpx -silent -mc 200 -json > output.json
           
           # 使用 jq 提取域名并保存到 Last-domain.txt
           jq -r '.url' output.json | sed 's|^https://||g; s|^http://||g' > Last-domain.txt
-          if [ -s "Last-domain.txt" ]; then
-            echo "::set-output name=domain_check_updated::true"
-          else
-            echo "No valid domain name was detected, skipping commit."
-            echo "::set-output name=domain_check_updated::false"
-          fi
 
       - name: Commit and push domain check output files
-        if: steps.check_domains.outputs.domain_check_updated == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add Last-domain.txt
-          if ! git diff --quiet; then
+          if git diff --quiet; then
+            echo "No changes detected for Last-domain.txt, skipping commit."
+          else
             git commit -m "Update Last-domain.txt with domains without protocol"
             git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
-          else
-             echo "No changes detected for Last-domain.txt, skipping commit."
           fi
 
       - name: Delete Old Workflows
         uses: Mattraks/delete-workflow-runs@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          retain_days: 2
-          keep_minimum_runs: 0
+  

@@ -14,16 +14,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 检出代码库
       - name: Checkout Repository
         uses: actions/checkout@v3
 
+      # 设置环境
       - name: Setup Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl libxml2-utils
+          sudo apt-get install -y curl libxml2-utils jq
           sudo apt-get clean
-          echo "$HOME/go/bin" >> $GITHUB_PATH # Add go bin to path
-          
+          echo "$HOME/go/bin" >> $GITHUB_PATH # 将 Go 的 bin 目录添加到 PATH
+
+      # 提取 IP 并更新文件
       - name: Fetch IP and Update File
         id: fetch_ip
         run: |
@@ -35,18 +38,20 @@ jobs:
             IP=$(curl -s "$URL" | xmllint --html --xpath "string(/html/body/div[2]/div[2]/div/div[2]/div[2]/table/tbody/tr[$i]/td[2])" - 2>/dev/null)
             if echo "$IP" | grep -Pq '^(\d{1,3}\.){3}\d{1,3}$'; then
               echo "$IP" >> "$OUTPUT_FILE"
+              echo "Valid IP found: $IP"
             else
               echo "Invalid IP found: $IP, skipping..."
             fi
           done
+
           if [ -s "$OUTPUT_FILE" ]; then
             echo "ip_file_updated=true" >> $GITHUB_OUTPUT
-           
           else
-           echo "No valid IPs were found. Skipping commit."
+            echo "No valid IPs were found. Skipping commit."
             echo "ip_file_updated=false" >> $GITHUB_OUTPUT
           fi
 
+      # 提交并推送 IP 文件更改
       - name: Commit and Push IP Changes
         if: steps.fetch_ip.outputs.ip_file_updated == 'true'
         env:
@@ -63,17 +68,19 @@ jobs:
              echo "No changes detected for Fission_ip.txt, skipping commit."
           fi
 
-
+      # 设置 Python 环境
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
+      # 安装 Python 依赖
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # 验证并准备输入文件
       - name: Verify and Prepare Input Files
         id: prepare_files
         run: |
@@ -84,7 +91,8 @@ jobs:
           fi
           touch Fission_domain.txt
           echo "file_ready=true" >> $GITHUB_OUTPUT
-         
+
+      # 运行 Fission 脚本
       - name: Run Fission script
         if: steps.prepare_files.outputs.file_ready == 'true'
         id: run_fission
@@ -97,6 +105,7 @@ jobs:
             echo "domain_file_updated=false" >> $GITHUB_OUTPUT
           fi
 
+      # 提交并推送域名输出文件
       - name: Commit and push domain output files
         if: steps.run_fission.outputs.domain_file_updated == 'true'
         run: |
@@ -106,22 +115,25 @@ jobs:
           git commit -m "Update output files from Fission.py execution"
           git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
 
+      # 设置 Go 环境
       - name: Install Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.21'
 
+      # 安装 httpx
       - name: Install httpx
         run: |
           go install github.com/projectdiscovery/httpx/cmd/httpx@latest
-          echo "$HOME/go/bin" >> $GITHUB_PATH
+
+      # 检查域名并更新文件
       - name: Check Domains and Update File
         id: check_domains
         run: |
           if [ ! -f "Last-domain.txt" ]; then
             touch Last-domain.txt
           fi
-          # 使用 httpx -json 并且只输出 200 状态码的域名
+          # 使用 httpx 检查域名并输出状态码为 200 的域名
           cat Fission_domain.txt | httpx -silent -mc 200 -json > output.json
           
           # 使用 jq 提取域名并保存到 Last-domain.txt
@@ -133,6 +145,7 @@ jobs:
             echo "domain_check_updated=false" >> $GITHUB_OUTPUT
           fi
 
+      # 提交并推送域名检查输出文件
       - name: Commit and push domain check output files
         if: steps.check_domains.outputs.domain_check_updated == 'true'
         env:
@@ -148,6 +161,7 @@ jobs:
              echo "No changes detected for Last-domain.txt, skipping commit."
           fi
 
+      # 删除旧的工作流运行记录
       - name: Delete Old Workflows
         uses: Mattraks/delete-workflow-runs@v2
         with:

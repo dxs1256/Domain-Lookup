@@ -52,12 +52,12 @@ jobs:
             done
           elif [ "$IP_SOURCE" == "github" ]; then
             URL="https://raw.githubusercontent.com/ymyuuu/IPDB/refs/heads/main/bestproxy.txt"
-            IP=$(curl -s "$URL")
+            IP=$(curl -s "$URL" | head -n 1) # 只提取第一行
             if echo "$IP" | grep -Pq '^(\d{1,3}\.){3}\d{1,3}$'; then
-                echo "$IP" >> "$OUTPUT_FILE"
-              else
-                echo "Invalid IP found: $IP, skipping..."
-              fi
+              echo "$IP" >> "$OUTPUT_FILE"
+            else
+              echo "Invalid IP found: $IP, skipping..."
+            fi
           else
             echo "Invalid IP source specified."
             exit 1

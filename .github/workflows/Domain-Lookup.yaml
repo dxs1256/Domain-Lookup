@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: '0 */4 * * *'
   workflow_dispatch:
+    inputs:
+      ip_source:
+        description: '选择 IP 地址来源'
+        required: true
+        default: 'wetest'
+        type: choice
+        options:
+          - wetest
+          - github
 
 permissions:
   contents: write
@@ -23,27 +32,41 @@ jobs:
           sudo apt-get install -y curl libxml2-utils
           sudo apt-get clean
           echo "$HOME/go/bin" >> $GITHUB_PATH # Add go bin to path
-          
+
       - name: Fetch IP and Update File
         id: fetch_ip
         run: |
-          URL="https://www.wetest.vip/page/cloudflare/address_v4.html"
           OUTPUT_FILE="Fission_ip.txt"
           echo -n > "$OUTPUT_FILE"
+          IP_SOURCE="${{ github.event.inputs.ip_source }}"
 
-          for i in $(seq 6 8); do
-            IP=$(curl -s "$URL" | xmllint --html --xpath "string(/html/body/div[2]/div[2]/div/div[2]/div[2]/table/tbody/tr[$i]/td[2])" - 2>/dev/null)
+          if [ "$IP_SOURCE" == "wetest" ]; then
+            URL="https://www.wetest.vip/page/cloudflare/address_v4.html"
+            for i in $(seq 6 8); do
+              IP=$(curl -s "$URL" | xmllint --html --xpath "string(/html/body/div[2]/div[2]/div/div[2]/div[2]/table/tbody/tr[$i]/td[2])" - 2>/dev/null)
+              if echo "$IP" | grep -Pq '^(\d{1,3}\.){3}\d{1,3}$'; then
+                echo "$IP" >> "$OUTPUT_FILE"
+              else
+                echo "Invalid IP found: $IP, skipping..."
+              fi
+            done
+          elif [ "$IP_SOURCE" == "github" ]; then
+            URL="https://raw.githubusercontent.com/ymyuuu/IPDB/refs/heads/main/bestproxy.txt"
+            IP=$(curl -s "$URL")
             if echo "$IP" | grep -Pq '^(\d{1,3}\.){3}\d{1,3}$'; then
-              echo "$IP" >> "$OUTPUT_FILE"
-            else
-              echo "Invalid IP found: $IP, skipping..."
-            fi
-          done
+                echo "$IP" >> "$OUTPUT_FILE"
+              else
+                echo "Invalid IP found: $IP, skipping..."
+              fi
+          else
+            echo "Invalid IP source specified."
+            exit 1
+          fi
+
           if [ -s "$OUTPUT_FILE" ]; then
             echo "ip_file_updated=true" >> $GITHUB_OUTPUT
-           
           else
-           echo "No valid IPs were found. Skipping commit."
+            echo "No valid IPs were found. Skipping commit."
             echo "ip_file_updated=false" >> $GITHUB_OUTPUT
           fi
 
@@ -54,15 +77,14 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           git add Fission_ip.txt
           if ! git diff --quiet; then
-              git commit -m "Update Fission_ip.txt with latest IPs"
-              git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
+            git commit -m "Update Fission_ip.txt with latest IPs from ${{ github.event.inputs.ip_source }}"
+            git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
           else
-             echo "No changes detected for Fission_ip.txt, skipping commit."
+            echo "No changes detected for Fission_ip.txt, skipping commit."
           fi
-
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -84,7 +106,7 @@ jobs:
           fi
           touch Fission_domain.txt
           echo "file_ready=true" >> $GITHUB_OUTPUT
-         
+
       - name: Run Fission script
         if: steps.prepare_files.outputs.file_ready == 'true'
         id: run_fission
@@ -115,6 +137,7 @@ jobs:
         run: |
           go install github.com/projectdiscovery/httpx/cmd/httpx@latest
           echo "$HOME/go/bin" >> $GITHUB_PATH
+
       - name: Check Domains and Update File
         id: check_domains
         run: |
@@ -123,11 +146,11 @@ jobs:
           fi
           # 使用 httpx -json 并且只输出 200 状态码的域名
           cat Fission_domain.txt | httpx -silent -mc 200 -json > output.json
-          
+
           # 使用 jq 提取域名并保存到 Last-domain.txt
           jq -r '.url' output.json | sed 's|^https://||g; s|^http://||g' > Last-domain.txt
           if [ -s "Last-domain.txt" ]; then
-             echo "domain_check_updated=true" >> $GITHUB_OUTPUT
+            echo "domain_check_updated=true" >> $GITHUB_OUTPUT
           else
             echo "No valid domain name was detected, skipping commit."
             echo "domain_check_updated=false" >> $GITHUB_OUTPUT
@@ -145,7 +168,7 @@ jobs:
             git commit -m "Update Last-domain.txt with domains without protocol"
             git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
           else
-             echo "No changes detected for Last-domain.txt, skipping commit."
+            echo "No changes detected for Last-domain.txt, skipping commit."
           fi
 
       - name: Delete Old Workflows

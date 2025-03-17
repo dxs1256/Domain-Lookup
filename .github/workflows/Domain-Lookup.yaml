@@ -32,11 +32,12 @@ jobs:
           echo -n > "$OUTPUT_FILE"
 
           for i in $(seq 6 8); do
-            IP=$(curl -s "$URL" | xmllint --html --xpath "string(/html/body/div[2]/div[2]/div[2]/div[2]/div[2]/div/table/tbody/tr[$i]/td[2])" - 2>/dev/null)
+            IP=$(curl -s "$URL" | xmllint --html --xpath "string(//table/tbody/tr[$i]/td[2])" - 2>/dev/null)
+            echo "提取到的 IP 地址：$IP" # 添加调试信息
             if echo "$IP" | grep -Pq '^(\d{1,3}\.){3}\d{1,3}$'; then
               echo "$IP" >> "$OUTPUT_FILE"
             else
-              echo "Invalid IP found: $IP, skipping..."
+              echo "无效的 IP 地址：$IP，跳过..."
             fi
           done
           if [ -s "$OUTPUT_FILE" ]; then

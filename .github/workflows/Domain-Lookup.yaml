@@ -1,9 +1,9 @@
 name: 提取 IP、解析域名和验证域名可用性
 
-on:
-  schedule:
-    - cron: '0 */4 * * *'
-  workflow_dispatch:
+#  on:
+#  schedule:
+#     - cron: '0 */4 * * *'
+#   workflow_dispatch:
 
 permissions:
   contents: write

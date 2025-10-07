@@ -48,7 +48,7 @@ jobs:
           response=$(curl -s -X GET "$dns_records_url" -H "$headers")
           
           # 获取要删除的记录，保留 IP 地址 74.48.144.51
-          record_ids=$(echo "$response" | jq -r '.result[] | select(.name == "'"$CF_DOMAIN_NAME"'") | select(.content != "74.48.144.51") | .id')
+          record_ids=$(echo "$response" | jq -r '.result[] | select(.name == "'"$CF_DOMAIN_NAME"'") | select(.content != "") | .id')
           
           # 删除旧的 DNS 记录
           if [[ -n "$record_ids" ]]; then

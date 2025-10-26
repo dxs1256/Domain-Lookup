@@ -50,6 +50,22 @@ def get_headers():
         'Connection': 'keep-alive',
     }
 
+# 判定垃圾域名的函数
+def is_garbage_domain(domain):
+    # 1. 域名长度 > 20 字符
+    if len(domain) > 20:
+        return True
+
+    # 2. xn-- 出现次数 >= 3 次
+    if domain.count('xn--') >= 3:
+        return True
+
+    # 3. 子域名层级 >= 4 级
+    if domain.count('.') >= 3:
+        return True
+
+    return False
+
 # 查询域名的函数，自动重试和切换网站
 def fetch_domains_for_ip(ip_address, session, attempts=0, used_sites=None):
     if used_sites is None:
@@ -78,6 +94,9 @@ def fetch_domains_for_ip(ip_address, session, attempts=0, used_sites=None):
         tree = etree.fromstring(html_content, parser)
         a_elements = tree.xpath(site_info['xpath'])
         domains = [a.text for a in a_elements if a.text]
+
+        # 过滤垃圾域名
+        domains = [domain for domain in domains if not is_garbage_domain(domain)]
 
         if domains:
             logging.info(f"Successfully fetched domains for {ip_address} from {site_info['url']}")

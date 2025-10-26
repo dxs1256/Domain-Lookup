@@ -165,6 +165,30 @@ def perform_dns_lookups(domain_filename, result_filename, unique_ipv4_filename):
     except Exception as e:
         logging.error(f"Error performing DNS lookups: {e}")
 
+# 过滤超长域名（>30字符）
+def filter_long_domains(domain):
+    return len(domain) <= 30
+
+# 过滤重复 Punycode 段（如 xn--... 出现 ≥3 次）
+def filter_repeated_punycode(domain):
+    # 查找域名中的 Punycode 段（以 xn-- 开头）
+    punycode_segments = re.findall(r'xn--\S+', domain)
+    return len(punycode_segments) < 3
+
+# 过滤多级子域名（超过4级）
+def filter_multilevel_subdomains(domain):
+    # 分割域名并检查是否有超过4级子域名
+    parts = domain.split('.')
+    return len(parts) <= 5  # 根域名 + 至少1级子域名 = 2级，最多5级
+
+# 合并所有过滤器，若满足任一条件则过滤
+def filter_domains(domains):
+    filtered_domains = []
+    for domain in domains:
+        if filter_long_domains(domain) and filter_repeated_punycode(domain) and filter_multilevel_subdomains(domain):
+            filtered_domains.append(domain)
+    return filtered_domains
+
 # 主函数
 def main():
     # 确保文件存在
@@ -186,11 +210,14 @@ def main():
 
     domain_list = list(set(domain_list + list(existing_domains)))
 
-    # 保存域名列表
+    # 过滤垃圾域名
+    filtered_domain_list = filter_domains(domain_list)
+
+    # 保存过滤后的域名
     with open(domains, 'w') as output:
-        for domain in domain_list:
+        for domain in filtered_domain_list:
             output.write(domain + "\n")
-    logging.info("IP -> Domain lookup completed.")
+    logging.info("IP -> Domain lookup completed and garbage domains filtered.")
 
     # 域名解析IP
     perform_dns_lookups(domains, dns_result, ips)

@@ -10,6 +10,7 @@ from lxml import etree
 from fake_useragent import UserAgent
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from idna import encoding  # 用于处理 Punycode
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -58,6 +59,27 @@ def get_headers():
         'Accept': '*/*',
         'Connection': 'keep-alive',
     }
+
+# 过滤垃圾域名
+def filter_garbage_domain(domain):
+    # 过滤超长域名（>30字符）
+    if len(domain) > 30:
+        logging.info(f"垃圾域名: 超长域名 {domain}")
+        return True
+
+    # 过滤重复 Punycode 段（出现 ≥3 次）
+    punycode_segments = re.findall(r'xn--[a-zA-Z0-9]+', domain)
+    if len(punycode_segments) >= 3:
+        logging.info(f"垃圾域名: 重复 Punycode 段 {domain}")
+        return True
+
+    # 过滤多级子域名（超过4级）
+    parts = domain.split('.')
+    if len(parts) > 5:  # 域名最多有 4 个子域名加上顶级域
+        logging.info(f"垃圾域名: 多级子域名 {domain}")
+        return True
+
+    return False
 
 # 查询域名的函数，自动重试和切换网站
 def fetch_domains_for_ip(ip_address, session, attempts=0, used_sites=None):
@@ -108,6 +130,8 @@ def fetch_domains_concurrently(ip_addresses):
         for future in concurrent.futures.as_completed(future_to_ip):
             domains.extend(future.result())
 
+    # 过滤垃圾域名
+    domains = [domain for domain in domains if not filter_garbage_domain(domain)]
     return list(set(domains))
 
 # DNS查询函数

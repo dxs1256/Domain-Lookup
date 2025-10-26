@@ -1,11 +1,11 @@
 import os
+import re
 import random
 import ipaddress
 import socket
 import concurrent.futures
 import logging
 import requests
-import re
 from lxml import etree
 from fake_useragent import UserAgent
 from requests.adapters import HTTPAdapter
@@ -24,7 +24,7 @@ socket.setdefaulttimeout(5)
 MAX_WORKERS_REQUEST = 5
 MAX_WORKERS_DNS = 50
 
-# 反查网站配置（URL 无空格）
+# 反查网站配置（适配实际 HTML）
 SITES_CONFIG = {
     "dnsdblookup": {
         "url": "https://dnsdblookup.com/",
@@ -65,20 +65,37 @@ def is_valid_public_ipv4(ip_str):
         return False
 
 def is_ip_address(s):
-    """判断字符串是否为 IP 地址"""
     try:
         ipaddress.ip_address(s)
         return True
     except ValueError:
         return False
 
+def is_likely_junk_domain(domain):
+    """垃圾域名判定：满足任一条件即过滤
+    1. 长度 > 20
+    2. xn-- 出现 >= 3 次
+    3. 子域名层级 >= 4（即 split('.') 长度 >= 4）
+    """
+    if not domain:
+        return False
+    domain = domain.strip()
+    if len(domain) > 20:
+        return True
+    if domain.count('xn--') >= 3:
+        return True
+    if len(domain.split('.')) >= 4:
+        return True
+    return False
+
 def is_valid_domain(domain):
-    """判断是否为有效域名（非 IP、非空、格式合法）"""
-    if not domain or len(domain) < 2 or domain.startswith('-') or domain.endswith('-'):
+    if not domain or len(domain) < 2:
         return False
     if is_ip_address(domain):
         return False
-    # 域名正则：允许字母、数字、点、连字符，但不能以连字符开头/结尾
+    if is_likely_junk_domain(domain):
+        return False
+    # 基础格式校验
     if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$', domain):
         return False
     return True
@@ -90,9 +107,7 @@ def extract_domains_from_html(html, site_config):
     for xpath in site_config["xpaths"]:
         try:
             domains = tree.xpath(xpath)
-            # 过滤空值和纯 IP
-            clean_domains = [d.strip() for d in domains if d and d.strip()]
-            return clean_domains
+            return [d.strip() for d in domains if d and d.strip()]
         except Exception:
             continue
     return []
@@ -118,7 +133,6 @@ def fetch_domains_for_ip(ip, session):
             if has_no_result(html, site):
                 continue
             domains = extract_domains_from_html(html, site)
-            # 过滤掉 IP 和无效域名
             valid_domains = [d for d in domains if is_valid_domain(d)]
             if valid_domains:
                 logging.info(f"✅ Got {len(valid_domains)} domains for {ip} from {site_key}")
@@ -130,7 +144,7 @@ def fetch_domains_for_ip(ip, session):
 
 def fetch_all_domains(ip_list):
     session = setup_session()
-    all_domains = set()
+    all_domains = set()  # 自动去重
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS_REQUEST) as executor:
         future_to_ip = {executor.submit(fetch_domains_for_ip, ip, session): ip for ip in ip_list}
         for future in concurrent.futures.as_completed(future_to_ip):
@@ -179,6 +193,7 @@ def perform_dns_lookups(domain_list, existing_ips):
     return existing_ips | new_ips
 
 def main():
+    # 初始化文件
     for f in [IPS_FILE, DOMAINS_FILE]:
         if not os.path.exists(f):
             open(f, 'w', encoding='utf-8').close()
@@ -188,16 +203,16 @@ def main():
     valid_ips = [ip for ip in raw_ips if is_valid_public_ipv4(ip)]
     logging.info(f"Loaded {len(valid_ips)} valid public IPs.")
 
-    # 2. 反查域名（自动过滤 IP）
+    # 2. 反查域名（仅新域名，不保留历史）
     new_domains = fetch_all_domains(valid_ips)
-    existing_domains = load_lines(DOMAINS_FILE)
-    all_domains = existing_domains | set(new_domains)
-    save_lines(DOMAINS_FILE, all_domains)
-    logging.info(f"Total domains: {len(all_domains)}")
+    logging.info(f"Fetched {len(new_domains)} unique valid domains.")
 
-    # 3. DNS 解析
+    # ✅ 关键：直接覆盖，不合并历史
+    save_lines(DOMAINS_FILE, new_domains)
+
+    # 3. DNS 解析（IP 文件保留历史）
     existing_ips = load_lines(IPS_FILE, is_valid_public_ipv4)
-    final_ips = perform_dns_lookups(list(all_domains), existing_ips)
+    final_ips = perform_dns_lookups(new_domains, existing_ips)
     save_lines(IPS_FILE, final_ips)
     logging.info(f"Final IP count: {len(final_ips)}")
 

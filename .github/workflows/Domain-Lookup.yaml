@@ -1,9 +1,9 @@
 name: 提取 IP、解析域名和验证域名可用性
 
 on:
-   #schedule:
-   #  - cron: '0 */4 * * *'
-   workflow_dispatch:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '0 */4 * * *'
 
 permissions:
   contents: write
@@ -14,152 +14,94 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 步骤 1：检出仓库
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      # 步骤 2：设置基础环境（安装依赖）
-      - name: Setup Environment
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl libxml2-utils
-          sudo apt-get clean
-          echo "$HOME/go/bin" >> $GITHUB_PATH  # 将 Go bin 加入 PATH
-
-      # 步骤 3：从网页提取 Cloudflare 优选 IP 并写入文件
-      - name: Fetch IP and Update File
-        id: fetch_ip
+      # =============== 1. 提取优选 IP（使用静态源，避免动态渲染问题） ===============
+      - name: Fetch Cloudflare IPs from wetest.vip (Static Extraction)
         run: |
           URL="https://www.wetest.vip/page/cloudflare/address_v4.html"
-          OUTPUT_FILE="Fission_ip.txt"
-          echo -n > "$OUTPUT_FILE"
-
-          for i in $(seq 6 8); do
-            IP=$(curl -s "$URL" | xmllint --html --xpath "string(//table/tbody/tr[$i]/td[2])" - 2>/dev/null)
-            echo "提取到的 IP 地址：$IP"
-            if echo "$IP" | grep -Pq '^(\d{1,3}\.){3}\d{1,3}$'; then
-              echo "$IP" >> "$OUTPUT_FILE"
-            else
-              echo "无效的 IP 地址：$IP，跳过..."
-            fi
-          done
-
-          if [ -s "$OUTPUT_FILE" ]; then
+          echo -n > Fission_ip.txt
+          # 使用 curl + grep + awk 提取 IP（该页面是静态 HTML！）
+          curl -s "$URL" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n 10 | sort -u > Fission_ip.txt
+          cat Fission_ip.txt
+          if [ -s Fission_ip.txt ]; then
             echo "ip_file_updated=true" >> $GITHUB_OUTPUT
           else
-            echo "No valid IPs were found. Skipping commit."
-            echo "ip_file_updated=false" >> $GITHUB_OUTPUT
+            echo "No IPs found!" >&2
+            exit 1
           fi
+        id: fetch_ip
 
-      # 步骤 4：提交并推送 IP 文件变更（如有）
-      - name: Commit and Push IP Changes
+      - name: Commit IP File
         if: steps.fetch_ip.outputs.ip_file_updated == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Fission_ip.txt
-          if ! git diff --quiet; then
-            git commit -m "Update Fission_ip.txt with latest IPs"
-            git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
-          else
-            echo "No changes detected for Fission_ip.txt, skipping commit."
-          fi
+          git commit -m "Update Fission_ip.txt with latest Cloudflare IPs"
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
 
-      # 步骤 5：设置 Python 环境
+      # =============== 2. 运行 Fission.py ===============
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
-      # 步骤 6：安装 Python 依赖
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 步骤 7：验证输入文件是否存在
-      - name: Verify and Prepare Input Files
-        id: prepare_files
-        run: |
-          if [ ! -f "Fission_ip.txt" ]; then
-            echo "Error: Fission_ip.txt not found. Please include this file in the repository." >&2
-            echo "file_ready=false" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-          touch Fission_domain.txt
-          echo "file_ready=true" >> $GITHUB_OUTPUT
-
-      # 步骤 8：运行 Fission 脚本解析域名
-      - name: Run Fission script
-        if: steps.prepare_files.outputs.file_ready == 'true'
-        id: run_fission
+      - name: Run Fission.py
         run: |
           python Fission.py
-          if [ -s "Fission_domain.txt" ]; then
-            echo "domain_file_updated=true" >> $GITHUB_OUTPUT
-          else
-            echo "Fission.py did not create domain file, skipping commit."
-            echo "domain_file_updated=false" >> $GITHUB_OUTPUT
-          fi
 
-      # 步骤 9：提交并推送域名解析结果
-      - name: Commit and push domain output files
-        if: steps.run_fission.outputs.domain_file_updated == 'true'
+      - name: Commit Domain and IP Results
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Fission_domain.txt
-          git commit -m "Update output files from Fission.py execution"
-          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
+          git add Fission_domain.txt Fission_ip.txt dns_result.txt
+          if ! git diff --quiet; then
+            git commit -m "Update results from Fission.py"
+            git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
+          fi
 
-      # 步骤 10：安装 Go 环境
+      # =============== 3. 验证域名可用性 ===============
       - name: Install Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.21'
 
-      # 步骤 11：安装 httpx 工具
       - name: Install httpx
         run: |
           go install github.com/projectdiscovery/httpx/cmd/httpx@latest
           echo "$HOME/go/bin" >> $GITHUB_PATH
 
-      # 步骤 12：验证域名可用性并生成最终域名列表
-      - name: Check Domains and Update File
-        id: check_domains
+      - name: Check Domains with httpx
         run: |
-          if [ ! -f "Last-domain.txt" ]; then
-            touch Last-domain.txt
-          fi
-          cat Fission_domain.txt | httpx -silent -mc 200 -json > output.json
-          jq -r '.url' output.json | sed 's|^https://||g; s|^http://||g' > Last-domain.txt
-
-          if [ -s "Last-domain.txt" ]; then
-            echo "domain_check_updated=true" >> $GITHUB_OUTPUT
-          else
-            echo "No valid domain name was detected, skipping commit."
-            echo "domain_check_updated=false" >> $GITHUB_OUTPUT
+          touch Last-domain.txt
+          if [ -s Fission_domain.txt ]; then
+            cat Fission_domain.txt | httpx -silent -mc 200 -json | jq -r '.host' | sort -u > Last-domain.txt
           fi
 
-      # 步骤 13：提交并推送最终域名列表
-      - name: Commit and push domain check output files
-        if: steps.check_domains.outputs.domain_check_updated == 'true'
+      - name: Commit Final Domains
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add Last-domain.txt
-          if ! git diff --quiet; then
-            git commit -m "Update Last-domain.txt with domains without protocol"
+          if [ -s Last-domain.txt ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add Last-domain.txt
+            git commit -m "Update Last-domain.txt with live domains"
             git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
-          else
-            echo "No changes detected for Last-domain.txt, skipping commit."
           fi
 
-      # 步骤 14：清理旧的工作流运行记录
+      # =============== 4. 清理 ===============
       - name: Delete Old Workflows
         uses: Mattraks/delete-workflow-runs@v2
         with:

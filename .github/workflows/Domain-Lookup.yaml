@@ -122,11 +122,20 @@ jobs:
           if [ ! -f "Last-domain.txt" ]; then
             touch Last-domain.txt
           fi
-          # 使用 httpx -json 并且只输出 200 状态码的域名
-          cat Fission_domain.txt | httpx -silent -mc 200 -json > output.json
           
-          # 使用 jq 提取域名并保存到 Last-domain.txt（追加模式）
-          jq -r '.url' output.json | sed 's|^https://||g; s|^http://||g' >> Last-domain.txt
+          # 使用 httpx -json 来处理并获取所有状态码
+          httpx -silent -mc 200 -json < Fission_domain.txt > output.json
+          
+          # 使用 jq 提取每个域名的响应代码和域名
+          jq -r '.url + " " + .status_code' output.json > domain_status.log
+
+          # 输出日志信息，打印哪些响应 200，哪些其他响应
+          echo "=== 域名响应状态 ==="
+          cat domain_status.log
+
+          # 只将响应 200 的域名保存到 Last-domain.txt
+          jq -r 'select(.status_code == 200) | .url' output.json | sed 's|^https://||g; s|^http://||g' > Last-domain.txt
+          
           if [ -s "Last-domain.txt" ]; then
              echo "domain_check_updated=true" >> $GITHUB_OUTPUT
           else

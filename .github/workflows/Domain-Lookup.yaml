@@ -14,16 +14,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 检出代码
       - name: Checkout Repository
         uses: actions/checkout@v3
 
+      # 设置环境
       - name: Setup Environment
         run: |
           sudo apt-get update
           sudo apt-get install -y curl libxml2-utils
           sudo apt-get clean
-          echo "$HOME/go/bin" >> $GITHUB_PATH # Add go bin to path
+          echo "$HOME/go/bin" >> $GITHUB_PATH  # 添加 Go bin 到路径
 
+      # 提取 IP 地址并更新文件
       - name: Fetch IP and Update File
         id: fetch_ip
         run: |
@@ -33,14 +36,14 @@ jobs:
 
           for i in $(seq 6 8); do
             IP=$(curl -s "$URL" | xmllint --html --xpath "string(//table/tbody/tr[$i]/td[2])" - 2>/dev/null)
-            echo "提取到的 IP 地址：$IP" # 添加调试信息
+            echo "提取到的 IP 地址：$IP"  # 添加调试信息
             if echo "$IP" | grep -Pq '^(\d{1,3}\.){3}\d{1,3}$'; then
               echo "$IP" >> "$OUTPUT_FILE"
             else
               echo "无效的 IP 地址：$IP，跳过..."
             fi
           done
-
+          
           if [ -s "$OUTPUT_FILE" ]; then
             echo "ip_file_updated=true" >> $GITHUB_OUTPUT
           else
@@ -48,6 +51,7 @@ jobs:
             echo "ip_file_updated=false" >> $GITHUB_OUTPUT
           fi
 
+      # 提交和推送 IP 更改
       - name: Commit and Push IP Changes
         if: steps.fetch_ip.outputs.ip_file_updated == 'true'
         env:
@@ -57,21 +61,24 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add Fission_ip.txt
           if ! git diff --quiet; then
-              git commit -m "Update Fission_ip.txt with latest IPs"
-              git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
+            git commit -m "Update Fission_ip.txt with latest IPs"
+            git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
           else
-             echo "No changes detected for Fission_ip.txt, skipping commit."
+            echo "No changes detected for Fission_ip.txt, skipping commit."
 
+      # 设置 Python 环境
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
+      # 安装 Python 依赖
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # 验证并准备输入文件
       - name: Verify and Prepare Input Files
         id: prepare_files
         run: |
@@ -83,6 +90,7 @@ jobs:
           touch Fission_domain.txt
           echo "file_ready=true" >> $GITHUB_OUTPUT
 
+      # 运行 Fission 脚本
       - name: Run Fission script
         if: steps.prepare_files.outputs.file_ready == 'true'
         id: run_fission
@@ -94,15 +102,17 @@ jobs:
             echo "Fission.py did not create domain file, skipping commit."
             echo "domain_file_updated=false" >> $GITHUB_OUTPUT
 
+      # 提交并推送域名输出文件
       - name: Commit and push domain output files
         if: steps.run_fission.outputs.domain_file_updated == 'true'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add Fission_domain.txt
           git commit -m "Update output files from Fission.py execution"
           git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
 
+      # 安装 Go 和 httpx
       - name: Install Go
         uses: actions/setup-go@v4
         with:
@@ -113,6 +123,7 @@ jobs:
           go install github.com/projectdiscovery/httpx/cmd/httpx@latest
           echo "$HOME/go/bin" >> $GITHUB_PATH
 
+      # 检查域名并更新文件
       - name: Check Domains and Update File
         id: check_domains
         run: |
@@ -121,24 +132,25 @@ jobs:
           fi
 
           # 使用 httpx -json 来处理并获取所有状态码
-          httpx -silent -mc 200 -json < Fission_domain.txt > output.json
-
-          # 使用 jq 提取每个域名的响应代码和域名，并确保拼接时数字转为字符串
-          jq -r '.url + " " + (.status_code|tostring)' output.json > domain_status.log
-
+          cat Fission_domain.txt | httpx -silent -json > output.json
+          
+          # 使用 jq 提取每个域名的响应代码和域名
+          jq -r '.url + " " + .status_code' output.json > domain_status.log
+          
           # 输出日志信息，打印哪些响应 200，哪些其他响应
           echo "=== 域名响应状态 ==="
           cat domain_status.log
-
+          
           # 只将响应 200 的域名保存到 Last-domain.txt
           jq -r 'select(.status_code == 200) | .url' output.json | sed 's|^https://||g; s|^http://||g' > Last-domain.txt
-
+          
           if [ -s "Last-domain.txt" ]; then
              echo "domain_check_updated=true" >> $GITHUB_OUTPUT
           else
             echo "No valid domain name was detected, skipping commit."
             echo "domain_check_updated=false" >> $GITHUB_OUTPUT
 
+      # 提交并推送域名检查输出文件
       - name: Commit and push domain check output files
         if: steps.check_domains.outputs.domain_check_updated == 'true'
         env:
@@ -153,6 +165,7 @@ jobs:
           else
              echo "No changes detected for Last-domain.txt, skipping commit."
 
+      # 删除旧的工作流记录
       - name: Delete Old Workflows
         uses: Mattraks/delete-workflow-runs@v2
         with:

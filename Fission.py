@@ -189,18 +189,22 @@ def filter_domains(domains):
             filtered_domains.append(domain)
     return filtered_domains
 
+# 将最新抓取的 IP 地址写入 Fission_ip.txt，覆盖文件内容
+def update_ip_file(ip_addresses):
+    with open(ips, 'w') as file:
+        for ip in ip_addresses:
+            file.write(ip + "\n")
+
 # 主函数
 def main():
-    # 确保文件存在
-    if not os.path.exists(ips):
-        open(ips, 'w').close()
-    if not os.path.exists(domains):
-        open(domains, 'w').close()
+    # 获取 IP 地址
+    ip_list = fetch_ips_from_source()
+
+    # 更新 Fission_ip.txt，清空文件并保存最新的 IP 地址
+    update_ip_file(ip_list)
+    logging.info("Fission_ip.txt updated with new IP addresses.")
 
     # IP反查域名
-    with open(ips, 'r') as ips_txt:
-        ip_list = [ip.strip() for ip in ips_txt if ip.strip()]
-
     domain_list = fetch_domains_concurrently(ip_list)
     logging.info(f"Domain list: {domain_list}")
 

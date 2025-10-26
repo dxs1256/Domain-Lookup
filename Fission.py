@@ -165,46 +165,18 @@ def perform_dns_lookups(domain_filename, result_filename, unique_ipv4_filename):
     except Exception as e:
         logging.error(f"Error performing DNS lookups: {e}")
 
-# 过滤超长域名（>30字符）
-def filter_long_domains(domain):
-    return len(domain) <= 30
-
-# 过滤重复 Punycode 段（如 xn--... 出现 ≥3 次）
-def filter_repeated_punycode(domain):
-    # 查找域名中的 Punycode 段（以 xn-- 开头）
-    punycode_segments = re.findall(r'xn--\S+', domain)
-    return len(punycode_segments) < 3
-
-# 过滤多级子域名（超过4级）
-def filter_multilevel_subdomains(domain):
-    # 分割域名并检查是否有超过4级子域名
-    parts = domain.split('.')
-    return len(parts) <= 5  # 根域名 + 至少1级子域名 = 2级，最多5级
-
-# 合并所有过滤器，若满足任一条件则过滤
-def filter_domains(domains):
-    filtered_domains = []
-    for domain in domains:
-        if filter_long_domains(domain) and filter_repeated_punycode(domain) and filter_multilevel_subdomains(domain):
-            filtered_domains.append(domain)
-    return filtered_domains
-
-# 将最新抓取的 IP 地址写入 Fission_ip.txt，覆盖文件内容
-def update_ip_file(ip_addresses):
-    with open(ips, 'w') as file:
-        for ip in ip_addresses:
-            file.write(ip + "\n")
-
 # 主函数
 def main():
-    # 获取 IP 地址
-    ip_list = fetch_ips_from_source()
-
-    # 更新 Fission_ip.txt，清空文件并保存最新的 IP 地址
-    update_ip_file(ip_list)
-    logging.info("Fission_ip.txt updated with new IP addresses.")
+    # 确保文件存在
+    if not os.path.exists(ips):
+        open(ips, 'w').close()
+    if not os.path.exists(domains):
+        open(domains, 'w').close()
 
     # IP反查域名
+    with open(ips, 'r') as ips_txt:
+        ip_list = [ip.strip() for ip in ips_txt if ip.strip()]
+
     domain_list = fetch_domains_concurrently(ip_list)
     logging.info(f"Domain list: {domain_list}")
 
@@ -214,14 +186,11 @@ def main():
 
     domain_list = list(set(domain_list + list(existing_domains)))
 
-    # 过滤垃圾域名
-    filtered_domain_list = filter_domains(domain_list)
-
-    # 保存过滤后的域名
+    # 保存域名列表
     with open(domains, 'w') as output:
-        for domain in filtered_domain_list:
+        for domain in domain_list:
             output.write(domain + "\n")
-    logging.info("IP -> Domain lookup completed and garbage domains filtered.")
+    logging.info("IP -> Domain lookup completed.")
 
     # 域名解析IP
     perform_dns_lookups(domains, dns_result, ips)

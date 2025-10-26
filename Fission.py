@@ -20,11 +20,9 @@ DNS_RESULT_FILE = "dns_result.txt"
 
 socket.setdefaulttimeout(5)
 
-# 并发数（保守值）
 MAX_WORKERS_REQUEST = 5
 MAX_WORKERS_DNS = 50
 
-# 反查网站配置（适配实际 HTML）
 SITES_CONFIG = {
     "dnsdblookup": {
         "url": "https://dnsdblookup.com/",
@@ -72,11 +70,7 @@ def is_ip_address(s):
         return False
 
 def is_likely_junk_domain(domain):
-    """垃圾域名判定：满足任一条件即过滤
-    1. 长度 > 20
-    2. xn-- 出现 >= 3 次
-    3. 子域名层级 >= 4（即 split('.') 长度 >= 4）
-    """
+    """垃圾域名判定（满足任一即过滤）"""
     if not domain:
         return False
     domain = domain.strip()
@@ -95,7 +89,6 @@ def is_valid_domain(domain):
         return False
     if is_likely_junk_domain(domain):
         return False
-    # 基础格式校验
     if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$', domain):
         return False
     return True
@@ -144,7 +137,7 @@ def fetch_domains_for_ip(ip, session):
 
 def fetch_all_domains(ip_list):
     session = setup_session()
-    all_domains = set()  # 自动去重
+    all_domains = set()
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS_REQUEST) as executor:
         future_to_ip = {executor.submit(fetch_domains_for_ip, ip, session): ip for ip in ip_list}
         for future in concurrent.futures.as_completed(future_to_ip):
@@ -163,23 +156,14 @@ def dns_lookup(domain):
     except Exception:
         return domain, None
 
-def load_lines(filename, validator=None):
-    if not os.path.exists(filename):
-        return set()
-    with open(filename, 'r', encoding='utf-8') as f:
-        lines = {line.strip() for line in f if line.strip()}
-        if validator:
-            return {line for line in lines if validator(line)}
-        return lines
-
 def save_lines(filename, lines):
     with open(filename, 'w', encoding='utf-8') as f:
         for line in sorted(lines):
             f.write(line + '\n')
 
-def perform_dns_lookups(domain_list, existing_ips):
+def perform_dns_lookups(domain_list):
     if not domain_list:
-        return existing_ips
+        return set()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS_DNS) as executor:
         results = list(executor.map(dns_lookup, domain_list))
@@ -190,31 +174,36 @@ def perform_dns_lookups(domain_list, existing_ips):
                 f.write(f"{domain}: {ip}\n")
 
     new_ips = {ip for _, ip in results if ip and is_valid_public_ipv4(ip)}
-    return existing_ips | new_ips
+    return new_ips
 
 def main():
-    # 初始化文件
-    for f in [IPS_FILE, DOMAINS_FILE]:
-        if not os.path.exists(f):
-            open(f, 'w', encoding='utf-8').close()
+    # 初始化文件（清空）
+    open(IPS_FILE, 'w').close()
+    open(DOMAINS_FILE, 'w').close()
 
-    # 1. 读取并校验 IP
-    raw_ips = load_lines(IPS_FILE)
-    valid_ips = [ip for ip in raw_ips if is_valid_public_ipv4(ip)]
-    logging.info(f"Loaded {len(valid_ips)} valid public IPs.")
+    # 1. 从 wetest.vip 获取最新 Cloudflare IP（覆盖写入）
+    import subprocess
+    try:
+        result = subprocess.run([
+            'curl', '-s', 'https://www.wetest.vip/page/cloudflare/address_v4.html'
+        ], capture_output=True, text=True, check=True)
+        ips = re.findall(r'([0-9]{1,3}\.){3}[0-9]{1,3}', result.stdout)
+        valid_ips = [ip for ip in ips if is_valid_public_ipv4(ip)]
+        save_lines(IPS_FILE, valid_ips)
+        logging.info(f"Fetched {len(valid_ips)} Cloudflare IPs from wetest.vip")
+    except Exception as e:
+        logging.error(f"Failed to fetch IPs from wetest.vip: {e}")
+        return
 
-    # 2. 反查域名（仅新域名，不保留历史）
+    # 2. 反查域名（仅本次结果）
     new_domains = fetch_all_domains(valid_ips)
     logging.info(f"Fetched {len(new_domains)} unique valid domains.")
-
-    # ✅ 关键：直接覆盖，不合并历史
     save_lines(DOMAINS_FILE, new_domains)
 
-    # 3. DNS 解析（IP 文件保留历史）
-    existing_ips = load_lines(IPS_FILE, is_valid_public_ipv4)
-    final_ips = perform_dns_lookups(new_domains, existing_ips)
-    save_lines(IPS_FILE, final_ips)
-    logging.info(f"Final IP count: {len(final_ips)}")
+    # 3. DNS 解析（仅本次 IP，不保留历史）
+    final_ips = perform_dns_lookups(new_domains)
+    save_lines(IPS_FILE, final_ips)  # 覆盖原 IP 文件
+    logging.info(f"Final IP count (from DNS): {len(final_ips)}")
 
 if __name__ == '__main__':
     main()

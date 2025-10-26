@@ -5,6 +5,7 @@ import socket
 import concurrent.futures
 import logging
 import requests
+import re
 from lxml import etree
 from fake_useragent import UserAgent
 from requests.adapters import HTTPAdapter
@@ -17,33 +18,31 @@ IPS_FILE = "Fission_ip.txt"
 DOMAINS_FILE = "Fission_domain.txt"
 DNS_RESULT_FILE = "dns_result.txt"
 
-# 全局 socket 超时
 socket.setdefaulttimeout(5)
 
-# 并发数（保守值，防封）
-MAX_WORKERS_REQUEST = min(10, (os.cpu_count() or 4) * 2)
-MAX_WORKERS_DNS = min(50, (os.cpu_count() or 4) * 5)
+# 并发数（保守值）
+MAX_WORKERS_REQUEST = 5
+MAX_WORKERS_DNS = 50
 
-# 反查网站配置（URL 已修正，无空格）
+# 反查网站配置（URL 无空格）
 SITES_CONFIG = {
-    "ip138": {
-        "url": "https://site.ip138.com/",
-        "xpaths": ['//ul[@id="list"]/li/a'],
-        "no_result_keywords": ["未查询到", "暂无", "没有相关记录"]
-    },
     "dnsdblookup": {
         "url": "https://dnsdblookup.com/",
-        "xpaths": ['//ul[@id="list"]/li/a'],
+        "xpaths": ['//ul[@id="list"]//a/text()'],
         "no_result_keywords": ["No records found"]
     },
     "ipchaxun": {
         "url": "https://ipchaxun.com/",
-        "xpaths": ['//div[@id="J_domain"]/p/a'],
+        "xpaths": ['//div[@id="J_domain"]//a/text()'],
         "no_result_keywords": ["未查询到", "暂无相关域名"]
+    },
+    "ip138": {
+        "url": "https://site.ip138.com/",
+        "xpaths": ['//ul[@id="list"]//a/text()'],
+        "no_result_keywords": ["未查询到", "暂无", "没有相关记录"]
     }
 }
 
-# 固定 UA
 UA = UserAgent().random
 
 def get_headers():
@@ -52,7 +51,7 @@ def get_headers():
 def setup_session():
     session = requests.Session()
     retries = Retry(total=3, backoff_factor=0.5, status_forcelist=[500, 502, 503, 504])
-    adapter = HTTPAdapter(max_retries=retries, pool_connections=20, pool_maxsize=20)
+    adapter = HTTPAdapter(max_retries=retries, pool_connections=10, pool_maxsize=10)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
     session.headers.update({'Connection': 'keep-alive'})
@@ -65,15 +64,37 @@ def is_valid_public_ipv4(ip_str):
     except ValueError:
         return False
 
+def is_ip_address(s):
+    """判断字符串是否为 IP 地址"""
+    try:
+        ipaddress.ip_address(s)
+        return True
+    except ValueError:
+        return False
+
+def is_valid_domain(domain):
+    """判断是否为有效域名（非 IP、非空、格式合法）"""
+    if not domain or len(domain) < 2 or domain.startswith('-') or domain.endswith('-'):
+        return False
+    if is_ip_address(domain):
+        return False
+    # 域名正则：允许字母、数字、点、连字符，但不能以连字符开头/结尾
+    if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$', domain):
+        return False
+    return True
+
 def extract_domains_from_html(html, site_config):
     tree = etree.HTML(html)
     if tree is None:
         return []
     for xpath in site_config["xpaths"]:
-        elements = tree.xpath(xpath)
-        domains = [e.text.strip() for e in elements if e.text and e.text.strip()]
-        if domains:
-            return domains
+        try:
+            domains = tree.xpath(xpath)
+            # 过滤空值和纯 IP
+            clean_domains = [d.strip() for d in domains if d and d.strip()]
+            return clean_domains
+        except Exception:
+            continue
     return []
 
 def has_no_result(html, site_config):
@@ -90,16 +111,18 @@ def fetch_domains_for_ip(ip, session):
         site = SITES_CONFIG[site_key]
         url = f"{site['url']}{ip}/"
         try:
-            response = session.get(url, headers=get_headers(), timeout=10)
+            response = session.get(url, headers=get_headers(), timeout=12)
             if response.status_code != 200:
                 continue
             html = response.text
             if has_no_result(html, site):
                 continue
             domains = extract_domains_from_html(html, site)
-            if domains:
-                logging.info(f"✅ Got {len(domains)} domains for {ip} from {site_key}")
-                return domains
+            # 过滤掉 IP 和无效域名
+            valid_domains = [d for d in domains if is_valid_domain(d)]
+            if valid_domains:
+                logging.info(f"✅ Got {len(valid_domains)} domains for {ip} from {site_key}")
+                return valid_domains
         except Exception as e:
             logging.debug(f"⚠️ Failed {site_key} for {ip}: {e}")
             continue
@@ -156,7 +179,6 @@ def perform_dns_lookups(domain_list, existing_ips):
     return existing_ips | new_ips
 
 def main():
-    # 初始化文件
     for f in [IPS_FILE, DOMAINS_FILE]:
         if not os.path.exists(f):
             open(f, 'w', encoding='utf-8').close()
@@ -166,7 +188,7 @@ def main():
     valid_ips = [ip for ip in raw_ips if is_valid_public_ipv4(ip)]
     logging.info(f"Loaded {len(valid_ips)} valid public IPs.")
 
-    # 2. 反查域名
+    # 2. 反查域名（自动过滤 IP）
     new_domains = fetch_all_domains(valid_ips)
     existing_domains = load_lines(DOMAINS_FILE)
     all_domains = existing_domains | set(new_domains)

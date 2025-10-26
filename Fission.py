@@ -1,5 +1,4 @@
 import os
-import re
 import random
 import ipaddress
 import socket
@@ -18,10 +17,14 @@ IPS_FILE = "Fission_ip.txt"
 DOMAINS_FILE = "Fission_domain.txt"
 DNS_RESULT_FILE = "dns_result.txt"
 
-MAX_WORKERS_REQUEST = min(32, (os.cpu_count() or 4) * 2)
-MAX_WORKERS_DNS = min(100, (os.cpu_count() or 4) * 5)
+# 全局 socket 超时
+socket.setdefaulttimeout(5)
 
-# 反查网站配置（含备用 XPath 和关键词校验）
+# 并发数（保守值，防封）
+MAX_WORKERS_REQUEST = min(10, (os.cpu_count() or 4) * 2)
+MAX_WORKERS_DNS = min(50, (os.cpu_count() or 4) * 5)
+
+# 反查网站配置（URL 已修正，无空格）
 SITES_CONFIG = {
     "ip138": {
         "url": "https://site.ip138.com/",
@@ -40,13 +43,11 @@ SITES_CONFIG = {
     }
 }
 
-# ==================== 工具函数 ====================
-def is_valid_public_ipv4(ip_str):
-    try:
-        ip = ipaddress.ip_address(ip_str)
-        return ip.version == 4 and ip.is_global
-    except ValueError:
-        return False
+# 固定 UA
+UA = UserAgent().random
+
+def get_headers():
+    return {'User-Agent': UA}
 
 def setup_session():
     session = requests.Session()
@@ -57,13 +58,13 @@ def setup_session():
     session.headers.update({'Connection': 'keep-alive'})
     return session
 
-# 固定一个 UA 避免频繁变化触发风控
-UA = UserAgent().random
+def is_valid_public_ipv4(ip_str):
+    try:
+        ip = ipaddress.ip_address(ip_str)
+        return ip.version == 4 and ip.is_global
+    except ValueError:
+        return False
 
-def get_headers():
-    return {'User-Agent': UA}
-
-# ==================== IP 反查域名 ====================
 def extract_domains_from_html(html, site_config):
     tree = etree.HTML(html)
     if tree is None:
@@ -82,12 +83,9 @@ def has_no_result(html, site_config):
             return True
     return False
 
-def fetch_domains_for_ip(ip, session, used_sites=None):
-    if used_sites is None:
-        used_sites = set()
-    available_sites = [k for k in SITES_CONFIG if k not in used_sites]
+def fetch_domains_for_ip(ip, session):
+    available_sites = list(SITES_CONFIG.keys())
     random.shuffle(available_sites)
-
     for site_key in available_sites:
         site = SITES_CONFIG[site_key]
         url = f"{site['url']}{ip}/"
@@ -95,12 +93,9 @@ def fetch_domains_for_ip(ip, session, used_sites=None):
             response = session.get(url, headers=get_headers(), timeout=10)
             if response.status_code != 200:
                 continue
-
             html = response.text
             if has_no_result(html, site):
-                logging.debug(f"No domains found for {ip} on {site_key}")
                 continue
-
             domains = extract_domains_from_html(html, site)
             if domains:
                 logging.info(f"✅ Got {len(domains)} domains for {ip} from {site_key}")
@@ -124,27 +119,21 @@ def fetch_all_domains(ip_list):
                 logging.error(f"Unexpected error for {ip}: {e}")
     return list(all_domains)
 
-# ==================== DNS 解析 ====================
 def dns_lookup(domain):
     try:
-        # 设置 socket 超时
-        socket.setdefaulttimeout(5)
         ip = socket.gethostbyname(domain)
         return domain, ip
     except Exception:
         return domain, None
 
-def load_existing_ips(filename):
+def load_lines(filename, validator=None):
     if not os.path.exists(filename):
         return set()
     with open(filename, 'r', encoding='utf-8') as f:
-        return {line.strip() for line in f if is_valid_public_ipv4(line.strip())}
-
-def load_existing_domains(filename):
-    if not os.path.exists(filename):
-        return set()
-    with open(filename, 'r', encoding='utf-8') as f:
-        return {line.strip() for line in f if line.strip()}
+        lines = {line.strip() for line in f if line.strip()}
+        if validator:
+            return {line for line in lines if validator(line)}
+        return lines
 
 def save_lines(filename, lines):
     with open(filename, 'w', encoding='utf-8') as f:
@@ -153,50 +142,39 @@ def save_lines(filename, lines):
 
 def perform_dns_lookups(domain_list, existing_ips):
     if not domain_list:
-        logging.info("No domains to resolve.")
         return existing_ips
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS_DNS) as executor:
         results = list(executor.map(dns_lookup, domain_list))
 
-    # 写入 DNS 结果
     with open(DNS_RESULT_FILE, 'w', encoding='utf-8') as f:
         for domain, ip in results:
             if ip:
                 f.write(f"{domain}: {ip}\n")
 
-    # 提取有效公网 IP
-    new_ips = set()
-    for _, ip in results:
-        if ip and is_valid_public_ipv4(ip):
-            new_ips.add(ip)
+    new_ips = {ip for _, ip in results if ip and is_valid_public_ipv4(ip)}
+    return existing_ips | new_ips
 
-    # 合并去重
-    merged_ips = existing_ips | new_ips
-    return merged_ips
-
-# ==================== 主流程 ====================
 def main():
     # 初始化文件
     for f in [IPS_FILE, DOMAINS_FILE]:
         if not os.path.exists(f):
             open(f, 'w', encoding='utf-8').close()
 
-    # 1. 读取并校验 IP 列表
-    with open(IPS_FILE, 'r', encoding='utf-8') as f:
-        raw_ips = [line.strip() for line in f if line.strip()]
+    # 1. 读取并校验 IP
+    raw_ips = load_lines(IPS_FILE)
     valid_ips = [ip for ip in raw_ips if is_valid_public_ipv4(ip)]
     logging.info(f"Loaded {len(valid_ips)} valid public IPs.")
 
-    # 2. IP 反查域名
+    # 2. 反查域名
     new_domains = fetch_all_domains(valid_ips)
-    existing_domains = load_existing_domains(DOMAINS_FILE)
+    existing_domains = load_lines(DOMAINS_FILE)
     all_domains = existing_domains | set(new_domains)
     save_lines(DOMAINS_FILE, all_domains)
-    logging.info(f"Total domains after merge: {len(all_domains)}")
+    logging.info(f"Total domains: {len(all_domains)}")
 
-    # 3. 域名解析 IP
-    existing_ips = load_existing_ips(IPS_FILE)
+    # 3. DNS 解析
+    existing_ips = load_lines(IPS_FILE, is_valid_public_ipv4)
     final_ips = perform_dns_lookups(list(all_domains), existing_ips)
     save_lines(IPS_FILE, final_ips)
     logging.info(f"Final IP count: {len(final_ips)}")

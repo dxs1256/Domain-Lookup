@@ -42,9 +42,8 @@ jobs:
           done
           if [ -s "$OUTPUT_FILE" ]; then
             echo "ip_file_updated=true" >> $GITHUB_OUTPUT
-           
           else
-           echo "No valid IPs were found. Skipping commit."
+            echo "No valid IPs were found. Skipping commit."
             echo "ip_file_updated=false" >> $GITHUB_OUTPUT
           fi
 
@@ -116,6 +115,7 @@ jobs:
         run: |
           go install github.com/projectdiscovery/httpx/cmd/httpx@latest
           echo "$HOME/go/bin" >> $GITHUB_PATH
+          
       - name: Check Domains and Update File
         id: check_domains
         run: |
@@ -125,8 +125,8 @@ jobs:
           # 使用 httpx -json 并且只输出 200 状态码的域名
           cat Fission_domain.txt | httpx -silent -mc 200 -json > output.json
           
-          # 使用 jq 提取域名并保存到 Last-domain.txt
-          jq -r '.url' output.json | sed 's|^https://||g; s|^http://||g' > Last-domain.txt
+          # 使用 jq 提取域名并保存到 Last-domain.txt（追加模式）
+          jq -r '.url' output.json | sed 's|^https://||g; s|^http://||g' >> Last-domain.txt
           if [ -s "Last-domain.txt" ]; then
              echo "domain_check_updated=true" >> $GITHUB_OUTPUT
           else

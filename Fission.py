@@ -11,199 +11,172 @@ from fake_useragent import UserAgent
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-# ==================== 配置 ====================
+# 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
+# 文件配置
 IPS_FILE = "Fission_ip.txt"
 DOMAINS_FILE = "Fission_domain.txt"
 DNS_RESULT_FILE = "dns_result.txt"
 
-socket.setdefaulttimeout(5)
+# 并发数配置
+MAX_WORKERS_REQUEST = os.cpu_count() * 2  # 并发请求数量
+MAX_WORKERS_DNS = os.cpu_count() * 5  # 并发DNS查询数量
 
-MAX_WORKERS_REQUEST = 5
-MAX_WORKERS_DNS = 50
-
+# 网站配置
 SITES_CONFIG = {
-    "dnsdblookup": {
-        "url": "https://dnsdblookup.com/",
-        "xpaths": ['//ul[@id="list"]//a/text()'],
-        "no_result_keywords": ["No records found"]
-    },
-    "ipchaxun": {
-        "url": "https://ipchaxun.com/",
-        "xpaths": ['//div[@id="J_domain"]//a/text()'],
-        "no_result_keywords": ["未查询到", "暂无相关域名"]
-    },
-    "ip138": {
-        "url": "https://site.ip138.com/",
-        "xpaths": ['//ul[@id="list"]//a/text()'],
-        "no_result_keywords": ["未查询到", "暂无", "没有相关记录"]
-    }
+    "site_ip138": {"url": "https://site.ip138.com/", "xpath": '//ul[@id="list"]/li/a'},
+    "dnsdblookup": {"url": "https://dnsdblookup.com/", "xpath": '//ul[@id="list"]/li/a'},
+    "ipchaxun": {"url": "https://ipchaxun.com/", "xpath": '//div[@id="J_domain"]/p/a'}
 }
 
-UA = UserAgent().random
+# 生成随机User-Agent
+ua = UserAgent()
 
-def get_headers():
-    return {'User-Agent': UA}
-
+# 设置会话
 def setup_session():
     session = requests.Session()
-    retries = Retry(total=3, backoff_factor=0.5, status_forcelist=[500, 502, 503, 504])
-    adapter = HTTPAdapter(max_retries=retries, pool_connections=10, pool_maxsize=10)
+    retries = Retry(total=5, backoff_factor=0.3, status_forcelist=[500, 502, 503, 504])
+    adapter = HTTPAdapter(max_retries=retries)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
-    session.headers.update({'Connection': 'keep-alive'})
     return session
 
-def is_valid_public_ipv4(ip_str):
-    try:
-        ip = ipaddress.ip_address(ip_str)
-        return ip.version == 4 and ip.is_global
-    except ValueError:
-        return False
+# 生成请求头
+def get_headers():
+    return {
+        'User-Agent': ua.random,
+        'Accept': '*/*',
+        'Connection': 'keep-alive',
+    }
 
-def is_ip_address(s):
-    try:
-        ipaddress.ip_address(s)
-        return True
-    except ValueError:
-        return False
+# 查询域名的函数，自动重试和切换网站
+def fetch_domains_for_ip(ip_address, session, attempts=0, used_sites=None):
+    if used_sites is None:
+        used_sites = []
 
-def is_likely_junk_domain(domain):
-    """垃圾域名判定（满足任一即过滤）"""
-    if not domain:
-        return False
-    domain = domain.strip()
-    if len(domain) > 20:
-        return True
-    if domain.count('xn--') >= 3:
-        return True
-    if len(domain.split('.')) >= 4:
-        return True
-    return False
-
-def is_valid_domain(domain):
-    if not domain or len(domain) < 2:
-        return False
-    if is_ip_address(domain):
-        return False
-    if is_likely_junk_domain(domain):
-        return False
-    if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$', domain):
-        return False
-    return True
-
-def extract_domains_from_html(html, site_config):
-    tree = etree.HTML(html)
-    if tree is None:
+    if attempts >= 3:  # 如果已经尝试了3次，终止重试
+        logging.error(f"Failed to fetch domains for {ip_address} after 3 attempts.")
         return []
-    for xpath in site_config["xpaths"]:
-        try:
-            domains = tree.xpath(xpath)
-            return [d.strip() for d in domains if d and d.strip()]
-        except Exception:
-            continue
-    return []
 
-def has_no_result(html, site_config):
-    html_lower = html.lower()
-    for keyword in site_config["no_result_keywords"]:
-        if keyword.lower() in html_lower:
-            return True
-    return False
+    available_sites = {key: value for key, value in SITES_CONFIG.items() if key not in used_sites}
+    if not available_sites:
+        return []
 
-def fetch_domains_for_ip(ip, session):
-    available_sites = list(SITES_CONFIG.keys())
-    random.shuffle(available_sites)
-    for site_key in available_sites:
-        site = SITES_CONFIG[site_key]
-        url = f"{site['url']}{ip}/"
-        try:
-            response = session.get(url, headers=get_headers(), timeout=12)
-            if response.status_code != 200:
-                continue
-            html = response.text
-            if has_no_result(html, site):
-                continue
-            domains = extract_domains_from_html(html, site)
-            valid_domains = [d for d in domains if is_valid_domain(d)]
-            if valid_domains:
-                logging.info(f"✅ Got {len(valid_domains)} domains for {ip} from {site_key}")
-                return valid_domains
-        except Exception as e:
-            logging.debug(f"⚠️ Failed {site_key} for {ip}: {e}")
-            continue
-    return []
+    site_key = random.choice(list(available_sites.keys()))
+    site_info = available_sites[site_key]
+    used_sites.append(site_key)
 
-def fetch_all_domains(ip_list):
+    try:
+        url = f"{site_info['url']}{ip_address}/"
+        headers = get_headers()
+        response = session.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        html_content = response.text
+
+        parser = etree.HTMLParser()
+        tree = etree.fromstring(html_content, parser)
+        a_elements = tree.xpath(site_info['xpath'])
+        domains = [a.text for a in a_elements if a.text]
+
+        if domains:
+            logging.info(f"Successfully fetched domains for {ip_address} from {site_info['url']}")
+            return domains
+        else:
+            raise Exception("No domains found")
+
+    except Exception as e:
+        logging.warning(f"Error fetching domains for {ip_address} from {site_info['url']}: {e}")
+        return fetch_domains_for_ip(ip_address, session, attempts + 1, used_sites)
+
+# 并发处理所有IP地址
+def fetch_domains_concurrently(ip_addresses):
     session = setup_session()
-    all_domains = set()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS_REQUEST) as executor:
-        future_to_ip = {executor.submit(fetch_domains_for_ip, ip, session): ip for ip in ip_list}
-        for future in concurrent.futures.as_completed(future_to_ip):
-            ip = future_to_ip[future]
-            try:
-                domains = future.result()
-                all_domains.update(domains)
-            except Exception as e:
-                logging.error(f"Unexpected error for {ip}: {e}")
-    return list(all_domains)
+    domains = []
 
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS_REQUEST) as executor:
+        future_to_ip = {executor.submit(fetch_domains_for_ip, ip, session): ip for ip in ip_addresses}
+        for future in concurrent.futures.as_completed(future_to_ip):
+            domains.extend(future.result())
+
+    return list(set(domains))
+
+# DNS查询函数
 def dns_lookup(domain):
     try:
         ip = socket.gethostbyname(domain)
         return domain, ip
-    except Exception:
+    except socket.gaierror:
+        logging.error(f"DNS lookup failed for {domain}")
         return domain, None
 
-def save_lines(filename, lines):
-    with open(filename, 'w', encoding='utf-8') as f:
-        for line in sorted(lines):
-            f.write(line + '\n')
-
-def perform_dns_lookups(domain_list):
-    if not domain_list:
-        return set()
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS_DNS) as executor:
-        results = list(executor.map(dns_lookup, domain_list))
-
-    with open(DNS_RESULT_FILE, 'w', encoding='utf-8') as f:
-        for domain, ip in results:
-            if ip:
-                f.write(f"{domain}: {ip}\n")
-
-    new_ips = {ip for _, ip in results if ip and is_valid_public_ipv4(ip)}
-    return new_ips
-
-def main():
-    # 初始化文件（清空）
-    open(IPS_FILE, 'w').close()
-    open(DOMAINS_FILE, 'w').close()
-
-    # 1. 从 wetest.vip 获取最新 Cloudflare IP（覆盖写入）
-    import subprocess
+# 批量处理DNS查询
+def perform_dns_lookups(domain_filename, result_filename, unique_ipv4_filename):
     try:
-        result = subprocess.run([
-            'curl', '-s', 'https://www.wetest.vip/page/cloudflare/address_v4.html'
-        ], capture_output=True, text=True, check=True)
-        ips = re.findall(r'([0-9]{1,3}\.){3}[0-9]{1,3}', result.stdout)
-        valid_ips = [ip for ip in ips if is_valid_public_ipv4(ip)]
-        save_lines(IPS_FILE, valid_ips)
-        logging.info(f"Fetched {len(valid_ips)} Cloudflare IPs from wetest.vip")
+        with open(domain_filename, 'r') as file:
+            domains = file.read().splitlines()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS_DNS) as executor:
+            results = list(executor.map(dns_lookup, domains))
+
+        with open(result_filename, 'w') as output_file:
+            for domain, ip in results:
+                if ip:
+                    output_file.write(f"{domain}: {ip}\n")
+
+        ipv4_addresses = set(ip for _, ip in results if ip)
+
+        with open(unique_ipv4_filename, 'r') as file:
+            existing_ips = {line.strip() for line in file}
+
+        filtered_ipv4_addresses = set()
+        for ip in ipv4_addresses:
+            try:
+                ip_obj = ipaddress.ip_address(ip)
+                if ip_obj.is_global:
+                    filtered_ipv4_addresses.add(ip)
+            except ValueError:
+                continue
+
+        filtered_ipv4_addresses.update(existing_ips)
+
+        with open(unique_ipv4_filename, 'w') as output_file:
+            for address in filtered_ipv4_addresses:
+                output_file.write(address + '\n')
+
     except Exception as e:
-        logging.error(f"Failed to fetch IPs from wetest.vip: {e}")
-        return
+        logging.error(f"Error performing DNS lookups: {e}")
 
-    # 2. 反查域名（仅本次结果）
-    new_domains = fetch_all_domains(valid_ips)
-    logging.info(f"Fetched {len(new_domains)} unique valid domains.")
-    save_lines(DOMAINS_FILE, new_domains)
+# 主函数
+def main():
+    try:
+        if not os.path.exists(IPS_FILE):
+            open(IPS_FILE, 'w').close()
+        if not os.path.exists(DOMAINS_FILE):
+            open(DOMAINS_FILE, 'w').close()
 
-    # 3. DNS 解析（仅本次 IP，不保留历史）
-    final_ips = perform_dns_lookups(new_domains)
-    save_lines(IPS_FILE, final_ips)  # 覆盖原 IP 文件
-    logging.info(f"Final IP count (from DNS): {len(final_ips)}")
+        with open(IPS_FILE, 'r') as ips_txt:
+            ip_list = [ip.strip() for ip in ips_txt if ip.strip()]
 
+        domain_list = fetch_domains_concurrently(ip_list)
+        logging.info(f"Domain list: {domain_list}")
+
+        with open(DOMAINS_FILE, 'r') as file:
+            existing_domains = {line.strip() for line in file}
+
+        domain_list = list(set(domain_list + list(existing_domains)))
+
+        with open(DOMAINS_FILE, 'w') as output:
+            for domain in domain_list:
+                output.write(domain + "\n")
+        logging.info("IP -> Domain lookup completed.")
+
+        perform_dns_lookups(DOMAINS_FILE, DNS_RESULT_FILE, IPS_FILE)
+        logging.info("Domain -> IP lookup completed.")
+
+    except Exception as e:
+        logging.error(f"Error in main execution: {e}")
+
+# 程序入口
 if __name__ == '__main__':
     main()
